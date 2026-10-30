@@ -1,0 +1,54 @@
+# Dataset FINAL (batas 10–25 ribu baris). Cek ulang nama kolom setelah diunduh.
+# Sumber utama: benchmark Grinsztajn dkk. (NeurIPS 2022), Hugging Face inria-soda/tabular-benchmark.
+# PENTING: cek apakah target di versi benchmark sudah di-log, supaya tidak di-log dua kali.
+
+bike:
+  sumber: "HF inria-soda/tabular-benchmark — Bike_Sharing_Demand (cek folder reg_cat untuk versi dengan kategorik)"
+  baris: 17379
+  target: count            # di UCI asli bernama cnt; cek nama di versi benchmark
+  buang: [casual, registered, instant, dteday]   # casual + registered = target (bocor)
+  log_target: true
+  kategorik: [season, holiday, workingday, weather]  # cek
+
+news:
+  sumber: "UCI Online News Popularity (https://archive.ics.uci.edu/static/public/332/online+news+popularity.zip)"
+  baris: 39644
+  sampel_baris: 20000      # ambil sampel acak dengan seed tetap (maks 25 ribu)
+  sampel_seed: 1234
+  target: shares
+  buang: [url, timedelta]
+  log_target: true
+  kategorik: [data_channel, weekday]   # dari one-hot, mengikuti process_news DiffPuter
+  catatan: "target sulit (R² rendah untuk semua metode)"
+
+california:
+  sumber: "HF inria-soda/tabular-benchmark — houses"
+  baris: 20640
+  target: median_house_value   # cek nama
+  buang: []
+  log_target: false            # cek apakah sudah di-log di benchmark
+  kategorik: []
+
+house_sales:
+  sumber: "HF inria-soda/tabular-benchmark — house_sales"
+  baris: 21613
+  target: price
+  buang: []                    # cek kolom id/date di versi benchmark
+  log_target: true
+  kategorik: []                # isi jika memakai versi reg_cat
+
+miami:
+  sumber: "HF inria-soda/tabular-benchmark — MiamiHousing2016"
+  baris: 13932
+  target: SALE_PRC
+  buang: [PARCELNO]            # ID properti
+  log_target: true
+  kategorik: [avno60plus, structure_quality]   # opsional diperlakukan kategorik
+
+studi_kasus:
+  sumber: "data milik sendiri — letakkan di data/raw/studi_kasus/"
+  target: null
+  buang: []
+  log_target: null
+  kategorik: []
+  missing_asli: true           # jangan buang baris ber-NaN; jangan beri mask buatan

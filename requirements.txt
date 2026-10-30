@@ -1,0 +1,24 @@
+# Inti (versi diffputer asli + tambahan)
+torch
+numpy
+pandas
+scipy
+scikit-learn
+tqdm
+PyYAML
+openpyxl
+xlrd
+
+# Baseline
+xgboost>=2.0          # reg:quantileerror (XGBoost quantile) tersedia sejak 2.0
+hyperimpute           # mean, KNN, MICE, MissForest
+treeffuser            # baseline diffusion regresi (blei-lab)
+category_encoders==2.5.1.post0
+POT
+# GRAPE: lihat baselines_eksternal/GRAPE/environment.yml (butuh torch_geometric)
+# CARD : kode resmi https://github.com/XzwHan/CARD (environment terpisah bila perlu)
+
+# Evaluasi dan grafik
+matplotlib
+scikit-posthocs       # uji Nemenyi
+datasets              # unduh benchmark Grinsztajn dari Hugging Face

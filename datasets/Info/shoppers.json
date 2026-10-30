@@ -1,0 +1,53 @@
+{
+    "name": "shoppers",
+    "num_col_idx": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+    ],
+    "cat_col_idx": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+    ],
+    "target_col_idx": [
+        17
+    ],
+    "num_cols": [
+        "Administrative",
+        "Administrative_Duration",
+        "Informational",
+        "Informational_Duration",
+        "ProductRelated",
+        "ProductRelated_Duration",
+        "BounceRates",
+        "ExitRates",
+        "PageValues",
+        "SpecialDay"
+    ],
+    "cat_cols": [
+        "Month",
+        "OperatingSystems",
+        "Browser",
+        "Region",
+        "TrafficType",
+        "VisitorType",
+        "Weekend"
+    ],
+    "target": "Revenue",
+    "task_type": "classification",
+    "log_target": false,
+    "n_rows": 12330,
+    "source": "https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip"
+}
