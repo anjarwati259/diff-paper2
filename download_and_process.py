@@ -22,8 +22,16 @@ Bedanya dengan DiffPuter:
     lalu dipakai juga untuk val dan test. Di DiffPuter, MAR_mask dipanggil terpisah
     untuk train dan test sehingga mekanismenya berbeda.
 
+Dataset (fokus MIXED-TYPE; full numerik seperti California tidak dipakai di paper ini):
+  regresi     : bike (UCI 275), news (UCI 332), house (House Sales King County, Kaggle — unduh manual)
+  klasifikasi : shoppers (UCI 468)
+
+House Sales (manual): unduh kc_house_data.csv dari Kaggle "House Sales in King County, USA"
+  (kaggle.com/datasets/harlfoxem/housesalesprediction), simpan di datasets/house/kc_house_data.csv,
+  lalu: python download_and_process.py --data house
+
 Pemakaian:
-  python download_and_split.py                 # semua dataset (news, bike, shoppers)
+  python download_and_split.py                 # semua dataset UCI di NAME_URL_DICT_UCI
   python download_and_split.py --data bike     # satu dataset saja
   python download_and_process.py --data shoppers   # klasifikasi biner (task_type = classification)
   python download_and_split.py --no_csv        # simpan indeks split saja, tanpa CSV
@@ -51,6 +59,12 @@ NAME_URL_DICT_UCI = {
     'shoppers': 'https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip',
 }
 
+# dataset yang TIDAK diunduh otomatis: file disiapkan manual di datasets/{nama}/
+MANUAL_FILES = {
+    'house': ('kc_house_data.csv',
+              'https://www.kaggle.com/datasets/harlfoxem/housesalesprediction (House Sales in King County, USA)'),
+}
+
 SPLIT_RATIO = (0.7, 0.1, 0.2)       # train / val / test
 SEEDS = [0, 1, 2, 3, 4]             # 5 split = 5 mask (dipasangkan per seed)
 MAR_RATIOS = [0.3]   # missing ratio 0% tidak perlu mask
@@ -65,6 +79,15 @@ def unzip_file(zip_filepath, dest_path):
 
 
 def download_from_uci(name):
+    if name in MANUAL_FILES:                                   # unduh manual (mis. Kaggle butuh login)
+        fname, src = MANUAL_FILES[name]
+        try:
+            find_file(f'{DATA_DIR}/{name}', fname)
+            print(f'{name}: memakai {fname} yang sudah ada di {DATA_DIR}/{name}/')
+            return
+        except FileNotFoundError:
+            raise SystemExit(f'{fname} belum ada. Unduh manual dari {src}\n'
+                             f'lalu simpan di {DATA_DIR}/{name}/{fname}')
     print(f'Start processing dataset {name} from UCI.')
     save_dir = f'{DATA_DIR}/{name}'
     zip_path = f'{save_dir}/{name}.zip'
@@ -104,7 +127,7 @@ def save_data_and_info(name, df, num_cols, cat_cols, target, log_target, extra=N
         'task_type': task_type,
         'log_target': log_target,
         'n_rows': int(df.shape[0]),
-        'source': NAME_URL_DICT_UCI.get(name, ''),
+        'source': NAME_URL_DICT_UCI.get(name, MANUAL_FILES.get(name, ('', ''))[1]),
     }
     if extra:
         info.update(extra)
@@ -178,6 +201,31 @@ def process_bike():
     num_cols = ['yr', 'mnth', 'hr', 'temp', 'atemp', 'hum', 'windspeed']
 
     return save_data_and_info('bike', df, num_cols, cat_cols, target, log_target=True)
+
+
+def process_house():
+    """
+    House Sales in King County, USA (Kaggle; juga di benchmark reg_cat Grinsztajn dkk., NeurIPS 2022),
+    21.613 baris, REGRESI, MIXED-TYPE: 13 numerik + 5 kategorik.
+      - target  : price (dolar) -> log_target = true (sama dengan bike/news, standar-log saat dimuat)
+      - dibuang : id (pengenal), date (tanggal jual; tidak dipakai)
+      - kategorik: waterfront (0/1), view (0-4), condition (1-5), grade (1-13), zipcode (~70 kode pos)
+      - numerik : bedrooms, bathrooms, sqft_living, sqft_lot, floors, sqft_above, sqft_basement,
+                  yr_built, yr_renovated, lat, long, sqft_living15, sqft_lot15
+    Tidak ada baris yang dibuang (data ini tidak punya NaN).
+    """
+    path = find_file(f'{DATA_DIR}/house', 'kc_house_data.csv')
+    df = pd.read_csv(path)
+    num_cols = ['bedrooms', 'bathrooms', 'sqft_living', 'sqft_lot', 'floors', 'sqft_above', 'sqft_basement',
+                'yr_built', 'yr_renovated', 'lat', 'long', 'sqft_living15', 'sqft_lot15']
+    cat_cols = ['waterfront', 'view', 'condition', 'grade', 'zipcode']
+    target = 'price'
+    miss = [c for c in num_cols + cat_cols + [target] if c not in df.columns]
+    if miss:
+        raise SystemExit(f'kolom tidak ditemukan di {path}: {miss} (pastikan file kc_house_data.csv versi Kaggle)')
+    for c in cat_cols:
+        df[c] = df[c].astype(int)
+    return save_data_and_info('house', df, num_cols, cat_cols, target, log_target=True)
 
 
 def process_shoppers():
@@ -356,7 +404,8 @@ def make_mar_masks(name, ratios=MAR_RATIOS, seeds=SEEDS):
 # --------------------------------------------------------------------------
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Download, split, dan mask MAR dataset Paper 2')
-    parser.add_argument('--data', type=str, default='all', help="'all' atau salah satu: news, bike, shoppers")
+    parser.add_argument('--data', type=str, default='all',
+                        help="'all' (dataset UCI) atau salah satu: news, bike, shoppers, house")
     parser.add_argument('--no_download', action='store_true', help='lewati unduhan (zip sudah ada)')
     parser.add_argument('--no_csv', action='store_true', help='simpan indeks split saja, tanpa CSV')
     parser.add_argument('--only_mask', action='store_true', help='buat mask saja (data dan split sudah ada)')

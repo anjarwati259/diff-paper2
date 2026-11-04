@@ -6,7 +6,8 @@ Baseline: XGBoost dengan penanganan NaN bawaan (tanpa imputasi), hyperparameter 
 - Fitur yang di-mask diberi NaN; XGBoost belajar arah default tiap split untuk nilai hilang
   (sparsity-aware split finding, Chen & Guestrin, KDD 2016).
 - Kategorik: tipe category pandas (enable_categorical=True), NaN juga ditangani bawaan.
-- Target: log1p bila dataset memakai log target (sama dengan data_loader), dikembalikan ke skala asli.
+- Target: skala standar-log = z-score log1p(y) statistik train (data_loader.y_true_z). Dilatih, diprediksi,
+  dan dievaluasi di skala itu; tidak dikembalikan ke nilai asli (linear terhadap log1p -> model setara).
 - Hyperparameter: DEFAULT XGBoost (sama dengan XGBRegressor bawaan):
     learning_rate (eta) 0.3, max_depth 6, min_child_weight 1, subsample 1, colsample_bytree 1,
     reg_lambda 1, tree_method hist. TIDAK ada grid search.
@@ -34,7 +35,7 @@ Contoh:
     python run_xgboost_nan.py --dataset bike --ratio 0.3 --seed 0 --device cuda
 Hasil (folder terpisah dari versi tuning lama):
     results/xgboost_default/{dataset}/MAR30/seed0/xgboost_default_{val,test}.csv
-    results/xgboost_default/{dataset}/MAR30/seed0/xgboost_default_{val,test}_samples.npy   [n, N] skala asli
+    results/xgboost_default/{dataset}/MAR30/seed0/xgboost_default_{val,test}_samples.npy   [n, N] skala standar-log
     results/xgboost_default/{dataset}/MAR30/seed0/xgboost_default_metrics.json
     results/xgboost_default/{dataset}/MAR30/seed0/result.txt  (append)
 """
@@ -47,7 +48,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from data_loader import load_split
+from data_loader import load_split, load_ids
 
 
 # ----------------------------------------------------------------------
@@ -114,12 +115,6 @@ def make_frames(data, meta):
     return frames, feat_cols
 
 
-def to_model_space(y, log_target):
-    return np.log1p(y) if log_target else y
-
-
-def to_orig(y, log_target):
-    return np.expm1(y) if log_target else y
 
 
 # ----------------------------------------------------------------------
@@ -288,7 +283,7 @@ def run_cls(args, data, meta, t_all):
                                         target_names=[str(c) for c in meta['classes']], zero_division=0))
 
         idx_path = f'datasets/{args.dataset}/splits/seed{args.seed}/{part}_idx.npy'
-        out = pd.DataFrame({'id': np.load(idx_path) if os.path.exists(idx_path) else np.arange(len(y[part]))})
+        out = pd.DataFrame({'id': load_ids(idx_path, len(y[part]))})
         out['y_asli'] = data[part]['df'][meta['target']].values
         out['y_pred'] = np.array(meta['classes'], dtype=object)[P[part].argmax(1)]
         if thr is not None:
@@ -326,7 +321,7 @@ def main():
     p.add_argument('--seed', type=int, default=0)
     p.add_argument('--mech', default='MAR')
     p.add_argument('--varian', default='xgboost_default')
-    p.add_argument('--out_dir', default='results')
+    p.add_argument('--out_dir', default='results_zlog')
     p.add_argument('--device', default='cpu', help='cpu atau cuda')
     p.add_argument('--nthread', type=int, default=-1)
     p.add_argument('--num_q', type=int, default=10, help='jumlah kuantil = "sampel" (N)')
@@ -345,12 +340,11 @@ def main():
     data, meta = load_split(args.dataset, args.seed, args.ratio, args.mech)
     if meta.get('task', 'regression') == 'classification':
         return run_cls(args, data, meta, t_all)                 # XGBoost classifier (lihat run_cls)
-    log_t = bool(meta.get('log_target', False))
-    target = meta['target']
+    from data_loader import y_true_z
     frames, feat_cols = make_frames(data, meta)
 
-    y = {part: data[part]['df'][target].to_numpy(dtype=np.float64) for part in data}
-    dm = {part: xgb.DMatrix(frames[part], label=to_model_space(y[part], log_t),
+    y = {part: y_true_z(data[part]['df'], meta) for part in data}          # skala standar-log
+    dm = {part: xgb.DMatrix(frames[part], label=y[part],
                             enable_categorical=True, missing=np.nan) for part in data}
 
     tag = f'{args.mech}{int(round(args.ratio * 100))}'
@@ -381,11 +375,11 @@ def main():
                'quantile_levels': alphas, 'train_time_point_s': t_point, 'train_time_quantile_s': t_q}
 
     for part in ('val', 'test'):
-        y_point = to_orig(predict_best(bst_point, dm[part]), log_t)
+        y_point = predict_best(bst_point, dm[part])
         Q = np.sort(np.asarray(predict_best(bst_q, dm[part])).reshape(len(y[part]), -1), axis=1)  # perbaiki crossing
-        samples = to_orig(Q, log_t).T                        # [N, n] skala asli
+        samples = Q.T                                        # [N, n] skala standar-log
         Q90 = np.sort(np.asarray(predict_best(bst_q90, dm[part])).reshape(len(y[part]), -1), axis=1)
-        lo90, hi90 = to_orig(Q90[:, 0], log_t), to_orig(Q90[:, 1], log_t)
+        lo90, hi90 = Q90[:, 0], Q90[:, 1]
 
         m = y_metrics(y[part], samples, y_point=y_point)
         m['crps_fair_kuantil'] = m['crps']                   # rumus sampel iid (meremehkan untuk kuantil)
@@ -400,8 +394,7 @@ def main():
               f'cov min-max={m["coverage_minmax"]:.3f} (ideal {m["coverage_minmax_ideal"]:.3f})')
 
         idx_path = f'datasets/{args.dataset}/splits/seed{args.seed}/{part}_idx.npy'
-        out = pd.DataFrame({'id': np.load(idx_path) if os.path.exists(idx_path)
-                            else np.arange(len(y[part]))})
+        out = pd.DataFrame({'id': load_ids(idx_path, len(y[part]))})
         for c in feat_cols:
             out[c] = frames[part][c].astype(object).values
         out['y_asli'] = y[part]

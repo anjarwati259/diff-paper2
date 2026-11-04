@@ -41,7 +41,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from data_loader import load_split, inverse_y, clip_bounds
+from data_loader import load_split, inverse_y, y_true_z, clip_bounds
 from run_diffputer import (PositionalEmbedding, run_trials, imputation_metrics, y_metrics, clip_generated,
                            save_predictions, SIGMA_MIN, SIGMA_MAX, RHO, S_CHURN, S_MIN, S_MAX, S_NOISE)
 from run_usulan import build_parser, estep_train
@@ -326,7 +326,7 @@ def run_mask(args, train_fn, info, group):
                 y_samples = inverse_y(S[:, :, yi], meta)
                 np.save(f'{pred_dir}/{args.varian}_{part}_samples_iter{iteration}.npy',
                         y_samples.T.astype(np.float32))          # sampel y per iterasi (diagnosa)
-                ym = y_metrics(d['df'][meta['target']].to_numpy(dtype=np.float64), y_samples)
+                ym = y_metrics(y_true_z(d['df'], meta), y_samples)          # skala standar-log
                 print(f'Out-of-sample ({part}) → MAE={mae:.6f}  RMSE={rmse:.6f}  ACC={acc}  ACC_terdekat={acc_n}')
                 print(f'Prediksi y ({part}) → RMSE={ym["rmse"]:.4f}  MAE={ym["mae"]:.4f}  R2={ym["r2"]:.4f}  '
                       f'CRPS={ym["crps"]:.4f}  cov p5-95={ym["coverage_p5_p95"]:.3f}  '
@@ -359,6 +359,7 @@ def varian_suffix(args):
 
 def main():
     p = add_mask_args(build_parser('Metode usulan: DiffPuter + target-aware masking (Mod 2)'))
+    p.set_defaults(num_trials=10)            # ablasi: N = 10 di semua baris (sama dengan metode usulan)
     args = p.parse_args()
     if args.varian == 'auto':
         args.varian = f'usulan_mask_{varian_suffix(args)}'

@@ -1,0 +1,17 @@
+{
+  "cfg": {
+    "width": 256,
+    "depth": 3,
+    "dropout": 0.1,
+    "lr": 0.0003,
+    "wd": 1e-05
+  },
+  "val_rmse_z": 0.26439157128334045,
+  "seed_grid": 0,
+  "plr": {
+    "k": 48,
+    "dim": 24,
+    "sigma": 1.0
+  },
+  "kriteria": "RMSE val skala standar-log"
+}

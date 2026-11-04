@@ -17,9 +17,16 @@ Komponen (sama untuk kedua tugas):
   + clip hasil generate ke rentang train +-5% (klasifikasi: blok y ke +-0.55).
 
 Perbedaan per tugas (--task, default 'auto' = dibaca dari datasets/Info/{dataset}.json "task_type"):
-  regression     : y = log1p (bila log_target) + z-score; prediksi = rata-rata N sampel, interval =
-                   persentil; metrik RMSE, MAE, R2, CRPS, coverage. Alur = run_usulan_mask.run_mask, jadi
-                   hasilnya IDENTIK dengan run_usulan_plr_mask_sem_lamfix.py (seed & argumen sama).
+  regression     : y = log1p (bila log_target) + z-score; metrik & sampel y di skala standar-log (tanpa nilai asli).
+                   Alur EM sama dengan run_usulan_mask.run_mask (sampel IDENTIK dengan versi sebelumnya), ditambah:
+                   PREDIKSI TITIK = ENSEMBLE POSTERIOR MEAN: selama sampling val/test output denoiser
+                   D(x_t; sigma) = E[y | x_t] kolom y direkam; rata-rata atas N lintasan = kurva pm per langkah sigma
+                   (_{part}_pmkurva_iter{i}.npy). Hasil akhir: kurva pm DIRATA-RATA ANTAR SEMUA ITERASI EM, langkah
+                   sigma dipilih di VAL (RMSE val) -> y_pred. INTERVAL/CRPS/coverage = GABUNGAN sampel semua iterasi.
+                   Per iterasi juga dicetak: 'sampel' (rata-rata N sampel, cara lama) dan 'pm' (sigma dipilih di val).
+                   'val' otomatis ikut (dibutuhkan memilih sigma). Hasil akhir: metrics.json['ensemble'],
+                   CSV {part}.csv (y_pred = ensemble pm, y_pred_sampel = rata-rata sampel), {part}_samples.npy
+                   (gabungan sampel), {part}_pm_ensemble.npy.
   classification : y = one-hot +-0.5 (CARD, Han dkk. NeurIPS 2022), tidak distandardisasi.
                    PROBABILITAS = POSTERIOR MEAN (--readout pm, default): selama sampling, output denoiser
                    D(x_t; sigma) = E[x_0 | x_t] blok y direkam tiap langkah; rata-rata atas N lintasan =
@@ -31,6 +38,10 @@ Perbedaan per tugas (--task, default 'auto' = dibaca dari datasets/Info/{dataset
                    di metrics.json (y_ts). Metrik utama: AUC, F1 (macro/weighted, di 0.5 dan di ambang val), Acc.
                    'val' otomatis ikut dievaluasi. Pemilihan lambda & K: AUC val.
                    Kurva per sigma: _pm_kurva.csv; probabilitas per iterasi: _{part}_prob_iter{i}.npy.
+                   TAMBAHAN (keluaran lama tidak berubah): ENSEMBLE ANTAR ITERASI dengan aturan SAMA dengan regresi:
+                   kurva posterior mean dirata-rata antar semua iterasi EM, langkah sigma dipilih di val (--pm_select),
+                   lalu T & ambang dipilih di val -> metrics.json['ensemble'], {varian}_ensemble_{part}.csv,
+                   _{part}_prob_ensemble.npy, baris ENSEMBLE di result.txt.
 
 Hasil (folder baru, tidak menimpa hasil lama):
   results/usulan_final/{ds}/{tag}/seed{k}/usulan_plr_mask_sem_lam10_p0.5_{result.txt, metrics.json, ...}
@@ -56,8 +67,8 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 
-from data_loader import load_split, clip_bounds, inverse_transform, y_true_index, model_to_eval
-from run_diffputer import imputation_metrics, clip_generated, SIGMA_MIN, SIGMA_MAX, RHO, S_CHURN, S_MIN, S_MAX, S_NOISE
+from data_loader import load_split, clip_bounds, inverse_transform, y_true_index, model_to_eval, load_ids, inverse_y, y_true_z
+from run_diffputer import imputation_metrics, y_metrics, save_predictions, clip_generated, SIGMA_MIN, SIGMA_MAX, RHO, S_CHURN, S_MIN, S_MAX, S_NOISE
 from run_usulan import build_parser, estep_train
 from run_usulan_mask import PrecondMask, edm_loss_mask, run_trials_cond, add_mask_args, run_mask, varian_suffix
 from run_usulan_plr_mask_sem_lamfix import MLPDiffusionPLR
@@ -225,7 +236,7 @@ def save_predictions_cls(path_prefix, part, d, S, P, q, agree, meta, args, thr=N
     df = d['df']
     feat_cols = meta['num_cols'] + meta['cat_cols']
     idx_path = f"datasets/{args.dataset}/splits/seed{args.seed}/{part}_idx.npy"
-    out = pd.DataFrame({'id': np.load(idx_path) if os.path.exists(idx_path) else np.arange(len(df))})
+    out = pd.DataFrame({'id': load_ids(idx_path, len(df))})
     shown = df[feat_cols].mask(d['mask_feat'])
     imputed = inverse_transform(model_to_eval(S.mean(0), meta), meta)
     for j, c in enumerate(feat_cols):
@@ -285,6 +296,7 @@ def run_cls(args, train_fn, info, group):
     print(f'Varian {args.varian} | masking p={args.p_cond:g}, resample test={args.resample_test} | {info}'
           f' | E-step: {"SEM (1 sampel)" if getattr(args, "sem", False) else "rata-rata trial (asli)"}')
 
+    ENS = {'PM': {p: [] for p in parts}, 'q': {p: [] for p in parts}, 'Y': {p: [] for p in parts}, 'S': {}, 'it': []}
     summary = {'varian': args.varian, 'kelompok': group, 'task': 'classification', 'dataset': args.dataset,
                'mech': args.mech, 'ratio': args.ratio, 'seed': args.seed, 'classes': meta['classes'],
                'prior_train': prior.tolist(), 'args': vars(args), 'iterations': []}
@@ -344,6 +356,7 @@ def run_cls(args, train_fn, info, group):
                         Y.transpose(1, 0, 2).astype(np.float32))  # [n, N, K]
                 q = mc.probs_from_samples(Y)                       # cara baca lama (rata-rata sampel)
                 PM = probs_posterior_mean(Dy)                      # [steps, n, K]
+                ENS['PM'][part].append(PM); ENS['q'][part].append(q); ENS['Y'][part].append(Y); ENS['S'][part] = S
                 if part == 'val':                                  # semua pilihan dibuat di VAL
                     sel = select_step(PM, y_true[part], args.pm_select)
                     P_val = PM[sel] if args.readout == 'pm' else q
@@ -384,6 +397,7 @@ def run_cls(args, train_fn, info, group):
                             f'AUC {m_main["auc"]:.4f} AUC(w) {m_main["auc_weighted"]:.4f} Brier {m_main["brier"]:.4f} '
                             f'NLL {m_main["nll"]:.4f} ECE {m_main["ece"]:.4f}{thr_txt} | '
                             f'sampel AUC {m_samp["auc"]:.4f} Brier {m_samp["brier"]:.4f} | waktu test {t_out:.0f}s\n')
+            ENS['it'].append(iteration)
             kpath = f'{pred_dir}/{args.varian}_pm_kurva.csv'
             pd.DataFrame(kurva).to_csv(kpath, mode='a', header=not os.path.exists(kpath) or iteration == 0,
                                        index=False)
@@ -392,11 +406,216 @@ def run_cls(args, train_fn, info, group):
         with open(f'{pred_dir}/{args.varian}_metrics.json', 'w') as f:
             json.dump(summary, f, indent=2)
 
+    # ---- TAMBAHAN: ensemble antar iterasi (aturan sama dengan regresi; keluaran lama di atas tidak berubah) ----
+    if ENS['it']:
+        y_val = y_true['val']
+        if args.readout == 'pm':                        # kurva posterior mean dirata-rata antar iterasi, sigma dipilih di val
+            ens = {p: np.mean(ENS['PM'][p], 0) for p in parts}
+            s_e = select_step(ens['val'], y_val, args.pm_select)
+            Pe = {p: ens[p][s_e] for p in parts}
+        else:                                           # cara baca sampel: rata-rata probabilitas sampel antar iterasi
+            s_e = None
+            Pe = {p: np.mean(ENS['q'][p], 0) for p in parts}
+        Te = mc.fit_temperature(Pe['val'], y_val, objective='brier')
+        thr_e = mc.fit_threshold(Pe['val'], y_val, objective=args.thr_objective)
+        summary['ensemble'] = {'iterasi': ENS['it'], 'readout': args.readout, 'pm_langkah': s_e,
+                               'pm_sigma': None if s_e is None else float(sig[s_e]), 'ambang': thr_e, 'T_brier': Te}
+        print('=' * 60)
+        print(f'ENSEMBLE iterasi {ENS["it"]} | {args.readout}' +
+              (f' (langkah {s_e}, sigma {sig[s_e]:.3g}, dipilih {args.pm_select} val)' if s_e is not None else ''))
+        for p in parts:
+            Ycat = np.concatenate(ENS['Y'][p], 0)
+            qe = np.mean(ENS['q'][p], 0)
+            agree = mc.vote_agreement(Ycat, Pe[p].argmax(1))
+            m = mc.cls_metrics(Pe[p], y_true[p], thr_e)
+            m['agreement'] = float(agree.mean())
+            m_ts = mc.cls_metrics(mc.apply_temperature(Pe[p], Te), y_true[p], thr_e)
+            summary['ensemble'][p] = {'y': m, 'y_ts': m_ts}
+            print(f'ENSEMBLE ({p}) → {mc.fmt(m)}  agreement={m["agreement"]:.3f}'
+                  f'{" [ambang dipilih di val ini]" if p == "val" else ""}')
+            np.save(f'{pred_dir}/{args.varian}_{p}_prob_ensemble.npy', Pe[p].astype(np.float32))
+            save_predictions_cls(f'{pred_dir}/{args.varian}_ensemble', p, data[p], ENS['S'][p], Pe[p], qe, agree,
+                                 meta, args, thr_e)
+            thr_txt = (f' | ambang {thr_e:.3f}: Acc {m["acc_thr"]:.4f} F1(macro) {m["f1_macro_thr"]:.4f} '
+                       f'F1(w) {m["f1_weighted_thr"]:.4f}') if 'thr' in m else ''
+            with open(result_path, 'a') as f:
+                f.write(f'ENSEMBLE iterasi {ENS["it"]} | {p} | y {args.readout}'
+                        + (f' (sigma {sig[s_e]:.3g})' if s_e is not None else '') +
+                        f' Acc {m["acc"]:.4f} F1(macro) {m["f1_macro"]:.4f} F1(w) {m["f1_weighted"]:.4f} '
+                        f'AUC {m["auc"]:.4f} AUC(w) {m["auc_weighted"]:.4f} Brier {m["brier"]:.4f} '
+                        f'NLL {m["nll"]:.4f} ECE {m["ece"]:.4f}{thr_txt}\n')
+
     summary['total_time_s'] = time.time() - start_all
     with open(f'{pred_dir}/{args.varian}_metrics.json', 'w') as f:
         json.dump(summary, f, indent=2)
     print('=' * 60)
     print(f'Selesai ({summary["total_time_s"]:.0f}s). Hasil: {pred_dir}/{args.varian}_*  | checkpoint: {ckpt_dir}')
+
+
+# ======================================================================
+# Regresi: alur EM run_mask + posterior mean & ensemble antar iterasi
+# ======================================================================
+def point_metrics(y, p):
+    return {'rmse': float(np.sqrt(((y - p) ** 2).mean())), 'mae': float(np.abs(y - p).mean()),
+            'r2': float(1 - ((y - p) ** 2).sum() / ((y - y.mean()) ** 2).sum())}
+
+
+def pick_step_reg(curve_val, y_val):
+    """curve_val [steps, n] (skala standar-log) -> langkah dengan RMSE val terkecil."""
+    return int(np.argmin([point_metrics(y_val, c)['rmse'] for c in curve_val]))
+
+
+def run_reg(args, train_fn, info, group):
+    """= run_usulan_mask.run_mask (M-step, E-step SEM, sampling kondisional, urutan acak SAMA -> sampel identik),
+    dengan sampler perekam denoiser untuk posterior mean, dan hasil akhir ENSEMBLE PM antar iterasi."""
+    if args.quick:
+        args.max_iter, args.max_epochs, args.patience = 2, 200, 50
+        args.num_steps, args.resample, args.num_trials = 10, 2, 5
+        args.varian = args.varian + '_quick'
+    if args.resample_test is None:
+        args.resample_test = args.resample
+    if 'val' not in args.parts:
+        print("[info] regresi: 'val' ditambahkan ke --parts (dibutuhkan memilih sigma posterior mean)")
+    parts = ['val'] + [p for p in args.parts if p != 'val']
+    args.parts = parts
+
+    device = f'cuda:{args.gpu}' if torch.cuda.is_available() and args.gpu >= 0 else 'cpu'
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+
+    tag = f'{args.mech}{int(round(args.ratio * 100)):02d}'
+    ckpt_dir = f'ckpt/{group}/{args.dataset}/{tag}/seed{args.seed}/{args.varian}/{args.num_trials}_{args.num_steps}'
+    pred_dir = f'{args.out_dir}/{group}/{args.dataset}/{tag}/seed{args.seed}'
+    os.makedirs(pred_dir, exist_ok=True)
+    prefix = f'{pred_dir}/{args.varian}'
+    result_path = f'{prefix}_result.txt'
+    open(result_path, 'w').close()
+
+    data, meta = load_split(args.dataset, args.seed, args.ratio, args.mech,
+                            num_transform=getattr(args, 'num_transform', 'none'))
+    dim, yi, yc = meta['dim'], meta['y_idx'], meta['y_cols']
+    X_tr, M_tr = data['train']['X_obs'], data['train']['mask']
+    y_true = {p: y_true_z(data[p]['df'], meta) for p in parts}
+    print(f'Dataset {args.dataset} | {tag} | seed {args.seed} | device {device} | '
+          f'train {X_tr.shape}, val {data["val"]["X_obs"].shape}, test {data["test"]["X_obs"].shape}')
+    print(f'Varian {args.varian} | masking p={args.p_cond:g}, resample test={args.resample_test} | {info}'
+          f' | E-step: {"SEM (1 sampel)" if getattr(args, "sem", False) else "rata-rata trial (asli)"}'
+          f' | prediksi titik: ensemble posterior mean (sigma dipilih di val)')
+
+    summary = {'varian': args.varian, 'kelompok': group, 'dataset': args.dataset, 'mech': args.mech,
+               'ratio': args.ratio, 'seed': args.seed, 'args': vars(args), 'iterations': []}
+    start_all = time.time()
+    PMc = {p: [] for p in parts}          # kurva pm per iterasi [steps, n]
+    SAM = {p: [] for p in parts}          # sampel y per iterasi [N, n]
+    S_last, sig, iters_eval = {}, None, []
+
+    for iteration in range(args.max_iter):
+        print('=' * 60)
+        print(f'Iteration: {iteration}')
+        print(f'Checkpoint dir: {ckpt_dir}')
+        os.makedirs(f'{ckpt_dir}/{iteration}', exist_ok=True)
+        if iteration == 0:
+            X_miss = X_tr.copy()
+        else:
+            print(f'Loading X_miss from {ckpt_dir}/iter_{iteration}.npy')
+            X_miss = np.load(f'{ckpt_dir}/iter_{iteration}.npy')
+        print(f'[INFO] X_miss shape: {X_miss.shape}, range: [{X_miss.min():.4f}, {X_miss.max():.4f}]')
+
+        # ---- M-step ----
+        t0 = time.time()
+        net, _ = train_fn(X_miss, M_tr, dim, yi, args, device, f'{ckpt_dir}/{iteration}', print_model=(iteration == 0))
+        train_time = time.time() - t0
+        print(f'Training time: {train_time:.4f}s')
+        it_res = {'iteration': iteration, 'train_time_s': train_time}
+
+        # ---- E-step (SEM, full noise) ----
+        if M_tr.any():
+            t0 = time.time()
+            rec_X = estep_train(net, X_tr, M_tr, args, device, clip_bounds(meta))
+            np.save(f'{ckpt_dir}/iter_{iteration + 1}.npy', rec_X)
+            t_in = time.time() - t0
+            print(f'In-sample imputation time: {t_in:.2f}s')
+            mae, rmse, acc, acc_n = imputation_metrics(rec_X, data['train']['X_true'], data['train']['mask_feat'], meta)
+            print(f'In-sample  → MAE={mae:.6f}  RMSE={rmse:.6f}  ACC={acc}  ACC_terdekat={acc_n}')
+            it_res['in_sample'] = {'mae': mae, 'rmse': rmse, 'acc': acc, 'acc_terdekat': acc_n, 'time_s': t_in}
+        else:
+            print('Tidak ada sel hilang di train: data training tidak berubah antar iterasi')
+            np.save(f'{ckpt_dir}/iter_{iteration + 1}.npy', X_tr)
+
+        # ---- out-of-sample: kondisional + rekam denoiser ----
+        last = iteration == args.max_iter - 1
+        if last or not args.eval_last_only:
+            iters_eval.append(iteration)
+            for part in parts:
+                d = data[part]
+                t0 = time.time()
+                S, D, sig = run_trials_cond_record(net, d['X_obs'], d['mask'], yc, args, device,
+                                                   f'Out-of-sample imputation kondisional ({part})', clip_bounds(meta))
+                t_out = time.time() - t0
+                print(f'Out-of-sample imputation time ({part}): {t_out:.2f}s')
+                mae, rmse, acc, acc_n = imputation_metrics(S.mean(0), d['X_true'], d['mask_feat'], meta)
+                y_samples = inverse_y(S[:, :, yi], meta)                     # [N, n] skala standar-log
+                np.save(f'{prefix}_{part}_samples_iter{iteration}.npy', y_samples.T.astype(np.float32))
+                curve = inverse_y(D[..., 0].mean(0), meta)                    # [steps, n] posterior mean
+                np.save(f'{prefix}_{part}_pmkurva_iter{iteration}.npy', curve.astype(np.float32))
+                PMc[part].append(curve); SAM[part].append(y_samples); S_last[part] = S
+                ym = y_metrics(y_true[part], y_samples)
+                it_res[part] = {'imputasi': {'mae': mae, 'rmse': rmse, 'acc': acc, 'acc_terdekat': acc_n},
+                                'y': ym, 'time_s': t_out}
+                print(f'Out-of-sample ({part}) → MAE={mae:.6f}  RMSE={rmse:.6f}  ACC={acc}  ACC_terdekat={acc_n}')
+                print(f'Prediksi y ({part}, sampel) → RMSE={ym["rmse"]:.4f}  MAE={ym["mae"]:.4f}  R2={ym["r2"]:.4f}  '
+                      f'CRPS={ym["crps"]:.4f}  cov p5-95={ym["coverage_p5_p95"]:.3f}  '
+                      f'cov min-max={ym["coverage_minmax"]:.3f} (ideal {ym["coverage_minmax_ideal"]:.3f})')
+            s_it = pick_step_reg(PMc['val'][-1], y_true['val'])               # sigma iterasi ini, dipilih di val
+            with open(result_path, 'a') as f:
+                for part in parts:
+                    mp = point_metrics(y_true[part], PMc[part][-1][s_it])
+                    it_res[part]['y_pm'] = {**mp, 'langkah': s_it, 'sigma': float(sig[s_it])}
+                    ym, im = it_res[part]['y'], it_res[part]['imputasi']
+                    print(f'Prediksi y ({part}, posterior mean, sigma {sig[s_it]:.3g} dipilih di val) → '
+                          f'RMSE={mp["rmse"]:.4f}  MAE={mp["mae"]:.4f}  R2={mp["r2"]:.4f}')
+                    f.write(f'iteration {iteration} | {part} | imputasi MAE {im["mae"]:.6f} RMSE {im["rmse"]:.6f} '
+                            f'ACC {im["acc"]} ACC_terdekat {im["acc_terdekat"]} | y RMSE {ym["rmse"]:.4f} '
+                            f'MAE {ym["mae"]:.4f} R2 {ym["r2"]:.4f} CRPS {ym["crps"]:.4f} cov {ym["coverage_p5_p95"]:.3f} '
+                            f'| pm RMSE {mp["rmse"]:.4f} MAE {mp["mae"]:.4f} R2 {mp["r2"]:.4f} (sigma {sig[s_it]:.3g}) '
+                            f'| waktu test {it_res[part]["time_s"]:.0f}s\n')
+
+        summary['iterations'].append(it_res)
+        with open(f'{prefix}_metrics.json', 'w') as f:
+            json.dump(summary, f, indent=2)
+
+    # ---- HASIL AKHIR: ensemble antar iterasi (pm untuk titik, gabungan sampel untuk interval) ----
+    ens_pm = {p: np.mean(PMc[p], 0) for p in parts}
+    ens_s = {p: np.concatenate(SAM[p], 0) for p in parts}
+    s_e = pick_step_reg(ens_pm['val'], y_true['val'])
+    summary['ensemble'] = {'iterasi': iters_eval, 'langkah': s_e, 'sigma': float(sig[s_e]),
+                           'n_sampel': int(ens_s['val'].shape[0])}
+    print('=' * 60)
+    print(f'HASIL AKHIR: ensemble iterasi {iters_eval} | posterior mean sigma {sig[s_e]:.3g} (langkah {s_e}, dipilih RMSE val)'
+          f' | interval dari {ens_s["val"].shape[0]} sampel gabungan')
+    with open(result_path, 'a') as f:
+        for part in parts:
+            point = ens_pm[part][s_e]
+            mp = point_metrics(y_true[part], point)
+            ym = y_metrics(y_true[part], ens_s[part])
+            summary['ensemble'][part] = {'y_pm': mp, 'y_sampel': ym}
+            print(f'ENSEMBLE ({part}) → titik (pm): RMSE={mp["rmse"]:.4f}  MAE={mp["mae"]:.4f}  R2={mp["r2"]:.4f} | '
+                  f'interval (sampel): CRPS={ym["crps"]:.4f}  cov min-max={ym["coverage_minmax"]:.3f} '
+                  f'(ideal {ym["coverage_minmax_ideal"]:.3f})  [rata-rata sampel RMSE {ym["rmse"]:.4f}]')
+            f.write(f'ENSEMBLE iterasi {iters_eval} | {part} | pm RMSE {mp["rmse"]:.4f} MAE {mp["mae"]:.4f} '
+                    f'R2 {mp["r2"]:.4f} (sigma {sig[s_e]:.3g}) | sampel CRPS {ym["crps"]:.4f} '
+                    f'covmm {ym["coverage_minmax"]:.3f} RMSE {ym["rmse"]:.4f}\n')
+            save_predictions(prefix, part, data[part], S_last[part], ens_s[part], meta, args)   # isian = iterasi terakhir
+            csv = pd.read_csv(f'{prefix}_{part}.csv')
+            csv['y_pred_sampel'] = csv['y_pred']
+            csv['y_pred'] = point
+            csv.to_csv(f'{prefix}_{part}.csv', index=False)
+            np.save(f'{prefix}_{part}_pm_ensemble.npy', point.astype(np.float32))
+
+    summary['total_time_s'] = time.time() - start_all
+    with open(f'{prefix}_metrics.json', 'w') as f:
+        json.dump(summary, f, indent=2)
+    print(f'Selesai ({summary["total_time_s"]:.0f}s). Hasil: {prefix}_*  | checkpoint: {ckpt_dir}')
 
 
 # ======================================================================
@@ -440,7 +659,7 @@ def main():
                if args.task == 'classification' else ''))
 
     if args.task == 'regression':
-        run_mask(args, train_mstep, info, group=GROUP)            # alur regresi lama, apa adanya
+        run_reg(args, train_mstep, info, group=GROUP)             # alur run_mask + posterior mean & ensemble
     else:
         run_cls(args, train_mstep, info, group=GROUP)
 

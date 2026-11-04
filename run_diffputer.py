@@ -39,7 +39,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from data_loader import load_split, inverse_transform, inverse_y, clip_bounds, model_to_eval
+from data_loader import load_split, inverse_transform, inverse_y, y_true_z, load_ids, clip_bounds, model_to_eval
 
 # ======================================================================
 # Model (salinan model.py DiffPuter)
@@ -317,17 +317,18 @@ def y_metrics(y_true, samples):
 
 
 def save_predictions(path_prefix, part, d, S, y_samples, meta, args):
-    """CSV: id, fitur asli (NaN jika di-mask), {fitur}_isian, y_asli, y_pred, y_low, y_high."""
+    """CSV: id, fitur asli (NaN jika di-mask), {fitur}_isian, y_asli, y_pred, y_low, y_high.
+    Kolom y_* dan file _samples.npy di skala standar-log (z-score log1p(y) statistik train)."""
     df = d['df']
     feat_cols = meta['num_cols'] + meta['cat_cols']
-    out = pd.DataFrame({'id': np.load(f"datasets/{args.dataset}/splits/seed{args.seed}/{part}_idx.npy")})
+    out = pd.DataFrame({'id': load_ids(f"datasets/{args.dataset}/splits/seed{args.seed}/{part}_idx.npy", len(df))})
     shown = df[feat_cols].mask(d['mask_feat'])
     imputed = inverse_transform(model_to_eval(S.mean(0), meta), meta)
     for j, c in enumerate(feat_cols):
         out[c] = shown[c].values
         if d['mask_feat'][:, j].any():
             out[f'{c}_isian'] = np.where(d['mask_feat'][:, j], imputed[c].values, None)
-    out['y_asli'] = df[meta['target']].to_numpy(dtype=np.float64)
+    out['y_asli'] = y_true_z(df, meta)
     out['y_pred'] = y_samples.mean(0)
     out['y_low'] = np.percentile(y_samples, 5, axis=0)
     out['y_high'] = np.percentile(y_samples, 95, axis=0)
@@ -359,7 +360,7 @@ def main():
     p.add_argument('--eval_last_only', action='store_true',
                    help='out-of-sample hanya di iterasi terakhir (lebih cepat; asli = tiap iterasi)')
     p.add_argument('--quick', action='store_true', help='uji cepat alur (hasil TIDAK untuk dilaporkan)')
-    p.add_argument('--out_dir', default='results')
+    p.add_argument('--out_dir', default='results_zlog')
     p.add_argument('--gpu', type=int, default=0)
     args = p.parse_args()
 
@@ -439,7 +440,7 @@ def main():
                 y_samples = inverse_y(S[:, :, yi], meta)
                 np.save(f'{pred_dir}/{args.varian}_{part}_samples_iter{iteration}.npy',
                         y_samples.T.astype(np.float32))          # sampel y per iterasi (diagnosa)
-                ym = y_metrics(d['df'][meta['target']].to_numpy(dtype=np.float64), y_samples)
+                ym = y_metrics(y_true_z(d['df'], meta), y_samples)          # skala standar-log
                 print(f'Out-of-sample ({part}) → MAE={mae:.6f}  RMSE={rmse:.6f}  ACC={acc}  ACC_terdekat={acc_n}')
                 print(f'Prediksi y ({part}) → RMSE={ym["rmse"]:.4f}  MAE={ym["mae"]:.4f}  R2={ym["r2"]:.4f}  '
                       f'CRPS={ym["crps"]:.4f}  cov p5-95={ym["coverage_p5_p95"]:.3f}  '
