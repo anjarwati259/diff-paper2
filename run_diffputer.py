@@ -14,8 +14,12 @@ Alur dan tampilan output mengikuti main.py DiffPuter, per iterasi EM:
 Yang berubah (bukan algoritma):
   - Data dari data_loader.py (split/mask per seed; y kolom terakhir)
   - Di val/test, kolom y ikut ditebak bersama fitur yang hilang
-  - Selain MAE/RMSE/ACC imputasi, dicetak juga metrik prediksi y (skala asli)
-  - Output akhir: CSV prediksi, sampel y (.npy), metrik (.json)
+  - Selain MAE/RMSE/ACC imputasi, dicetak juga metrik prediksi y:
+      regresi     : RMSE, MAE, R2, CRPS, coverage & lebar interval (skala standar-log)
+      klasifikasi : y = blok one-hot +-0.5 (meta['y_cols']); probabilitas = rata-rata N sampel blok y
+                    (+0.5, dinormalkan) = cara baca DiffPuter; Acc, F1 macro, ROC-AUC (kelas = argmax,
+                    biner = ambang 0.5, tanpa pemilihan ambang), Brier. Definisi SAMA dengan metode_usulan.py.
+  - Output akhir: CSV prediksi, sampel y / probabilitas (.npy), metrik (.json)
     di folder results/diffputer_asli/{ds}/{tag}/seed{k}/ (checkpoint: ckpt/diffputer_asli/...)
 
 Modifikasi usulan (bobot, masking, stochastic EM) BELUM ada di file ini;
@@ -39,7 +43,12 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from data_loader import load_split, inverse_transform, inverse_y, clip_bounds, model_to_eval
+from sklearn.metrics import f1_score, roc_auc_score
+
+from data_loader import (load_split, inverse_transform, inverse_y, y_true_z, y_true_index, load_ids, clip_bounds,
+                         model_to_eval)
+
+EPS = 1e-6
 
 # ======================================================================
 # Model (salinan model.py DiffPuter)
@@ -316,18 +325,63 @@ def y_metrics(y_true, samples):
     }
 
 
-def save_predictions(path_prefix, part, d, S, y_samples, meta, args):
-    """CSV: id, fitur asli (NaN jika di-mask), {fitur}_isian, y_asli, y_pred, y_low, y_high."""
+def probs_from_samples(Y):
+    """Sampel blok one-hot [N, n, K] (+-0.5) -> probabilitas [n, K] (rata-rata sampel, cara DiffPuter)."""
+    q = np.clip(Y.mean(0) + 0.5, EPS, 1.0)
+    return q / q.sum(1, keepdims=True)
+
+
+def cls_metrics(P, y):
+    """Klasifikasi (sama dengan metode_usulan.py): Accuracy, F1 macro, ROC-AUC, Brier. Kelas = argmax
+    (biner = ambang 0.5). Brier = jumlah (p_k - onehot_k)^2 atas K kelas (Brier 1950);
+    brier_biner (biner) = rata-rata (p_1 - y)^2 = brier_score_loss sklearn = brier / 2."""
+    K = P.shape[1]
+    pred = P.argmax(1)
+    try:
+        auc = roc_auc_score(y, P[:, 1]) if K == 2 else roc_auc_score(y, P, multi_class='ovr', average='macro',
+                                                                     labels=list(range(K)))
+    except ValueError:
+        auc = float('nan')
+    out = {'acc': float((pred == y).mean()),
+           'f1_macro': float(f1_score(y, pred, average='macro', labels=list(range(K)), zero_division=0)),
+           'auc': float(auc), 'brier': float(((P - np.eye(K)[y]) ** 2).sum(1).mean())}
+    if K == 2:
+        out['brier_biner'] = float(((P[:, 1] - y) ** 2).mean())
+    return out
+
+
+def save_predictions_cls(path_prefix, part, d, S, P, meta, args):
+    """Klasifikasi. CSV: id, fitur asli (NaN jika di-mask), {fitur}_isian, y_asli (label), y_pred, p_{kelas}.
+    Bisa dibaca hitung_klasifikasi.py / hitung_metrik_tambahan.py."""
     df = d['df']
     feat_cols = meta['num_cols'] + meta['cat_cols']
-    out = pd.DataFrame({'id': np.load(f"datasets/{args.dataset}/splits/seed{args.seed}/{part}_idx.npy")})
+    out = pd.DataFrame({'id': load_ids(f"datasets/{args.dataset}/splits/seed{args.seed}/{part}_idx.npy", len(df))})
     shown = df[feat_cols].mask(d['mask_feat'])
     imputed = inverse_transform(model_to_eval(S.mean(0), meta), meta)
     for j, c in enumerate(feat_cols):
         out[c] = shown[c].values
         if d['mask_feat'][:, j].any():
             out[f'{c}_isian'] = np.where(d['mask_feat'][:, j], imputed[c].values, None)
-    out['y_asli'] = df[meta['target']].to_numpy(dtype=np.float64)
+    out['y_asli'] = df[meta['target']].values
+    out['y_pred'] = np.array(meta['classes'], dtype=object)[P.argmax(1)]
+    for k, cl in enumerate(meta['classes']):
+        out[f'p_{cl}'] = P[:, k]
+    out.to_csv(f'{path_prefix}_{part}.csv', index=False)
+
+
+def save_predictions(path_prefix, part, d, S, y_samples, meta, args):
+    """CSV: id, fitur asli (NaN jika di-mask), {fitur}_isian, y_asli, y_pred, y_low, y_high.
+    Kolom y_* dan file _samples.npy di skala standar-log (z-score log1p(y) statistik train)."""
+    df = d['df']
+    feat_cols = meta['num_cols'] + meta['cat_cols']
+    out = pd.DataFrame({'id': load_ids(f"datasets/{args.dataset}/splits/seed{args.seed}/{part}_idx.npy", len(df))})
+    shown = df[feat_cols].mask(d['mask_feat'])
+    imputed = inverse_transform(model_to_eval(S.mean(0), meta), meta)
+    for j, c in enumerate(feat_cols):
+        out[c] = shown[c].values
+        if d['mask_feat'][:, j].any():
+            out[f'{c}_isian'] = np.where(d['mask_feat'][:, j], imputed[c].values, None)
+    out['y_asli'] = y_true_z(df, meta)
     out['y_pred'] = y_samples.mean(0)
     out['y_low'] = np.percentile(y_samples, 5, axis=0)
     out['y_high'] = np.percentile(y_samples, 95, axis=0)
@@ -359,7 +413,7 @@ def main():
     p.add_argument('--eval_last_only', action='store_true',
                    help='out-of-sample hanya di iterasi terakhir (lebih cepat; asli = tiap iterasi)')
     p.add_argument('--quick', action='store_true', help='uji cepat alur (hasil TIDAK untuk dilaporkan)')
-    p.add_argument('--out_dir', default='results')
+    p.add_argument('--out_dir', default='results_zlog')
     p.add_argument('--gpu', type=int, default=0)
     args = p.parse_args()
 
@@ -381,8 +435,9 @@ def main():
 
     data, meta = load_split(args.dataset, args.seed, args.ratio, args.mech)
     dim, yi = meta['dim'], meta['y_idx']
+    is_reg = meta['task'] == 'regression'
     X_tr, M_tr = data['train']['X_obs'], data['train']['mask']
-    print(f'Dataset {args.dataset} | {tag} | seed {args.seed} | device {device} | '
+    print(f'Dataset {args.dataset} | {tag} | seed {args.seed} | device {device} | task {meta["task"]} | '
           f'train {X_tr.shape}, val {data["val"]["X_obs"].shape}, test {data["test"]["X_obs"].shape}')
 
     summary = {'varian': args.varian, 'dataset': args.dataset, 'mech': args.mech,
@@ -436,23 +491,38 @@ def main():
                 t_out = time.time() - t0
                 print(f'Out-of-sample imputation time ({part}): {t_out:.2f}s')
                 mae, rmse, acc, acc_n = imputation_metrics(S.mean(0), d['X_true'], d['mask_feat'], meta)
-                y_samples = inverse_y(S[:, :, yi], meta)
-                np.save(f'{pred_dir}/{args.varian}_{part}_samples_iter{iteration}.npy',
-                        y_samples.T.astype(np.float32))          # sampel y per iterasi (diagnosa)
-                ym = y_metrics(d['df'][meta['target']].to_numpy(dtype=np.float64), y_samples)
                 print(f'Out-of-sample ({part}) → MAE={mae:.6f}  RMSE={rmse:.6f}  ACC={acc}  ACC_terdekat={acc_n}')
-                print(f'Prediksi y ({part}) → RMSE={ym["rmse"]:.4f}  MAE={ym["mae"]:.4f}  R2={ym["r2"]:.4f}  '
-                      f'CRPS={ym["crps"]:.4f}  cov p5-95={ym["coverage_p5_p95"]:.3f}  '
-                      f'cov min-max={ym["coverage_minmax"]:.3f} (ideal {ym["coverage_minmax_ideal"]:.3f})')
+                if is_reg:
+                    y_samples = inverse_y(S[:, :, yi], meta)
+                    np.save(f'{pred_dir}/{args.varian}_{part}_samples_iter{iteration}.npy',
+                            y_samples.T.astype(np.float32))          # sampel y per iterasi (diagnosa)
+                    ym = y_metrics(y_true_z(d['df'], meta), y_samples)          # skala standar-log
+                    print(f'Prediksi y ({part}) → RMSE={ym["rmse"]:.4f}  MAE={ym["mae"]:.4f}  R2={ym["r2"]:.4f}  '
+                          f'CRPS={ym["crps"]:.4f}  cov p5-95={ym["coverage_p5_p95"]:.3f}  '
+                          f'cov min-max={ym["coverage_minmax"]:.3f} (ideal {ym["coverage_minmax_ideal"]:.3f})  '
+                          f'lebar min-max={ym["width_minmax"]:.4f}')
+                    baris_y = (f'y RMSE {ym["rmse"]:.4f} MAE {ym["mae"]:.4f} R2 {ym["r2"]:.4f} CRPS {ym["crps"]:.4f} '
+                               f'cov {ym["coverage_p5_p95"]:.3f} covmm {ym["coverage_minmax"]:.3f} '
+                               f'lebarmm {ym["width_minmax"]:.4f}')
+                else:
+                    P = probs_from_samples(S[:, :, meta['y_cols']])            # [n, K] rata-rata sampel
+                    np.save(f'{pred_dir}/{args.varian}_{part}_prob_iter{iteration}.npy', P.astype(np.float32))
+                    ym = cls_metrics(P, y_true_index(d['df'], meta))
+                    print(f'Prediksi y ({part}) → Acc={ym["acc"]:.4f}  F1(macro)={ym["f1_macro"]:.4f}  '
+                          f'AUC={ym["auc"]:.4f}  Brier={ym["brier"]:.4f}')
+                    baris_y = (f'y Acc {ym["acc"]:.4f} F1(macro) {ym["f1_macro"]:.4f} AUC {ym["auc"]:.4f} '
+                               f'Brier {ym["brier"]:.4f}')
                 it_res[part] = {'imputasi': {'mae': mae, 'rmse': rmse, 'acc': acc, 'acc_terdekat': acc_n},
                                 'y': ym, 'time_s': t_out}
                 if last:
-                    save_predictions(f'{pred_dir}/{args.varian}', part, d, S, y_samples, meta, args)
+                    if is_reg:
+                        save_predictions(f'{pred_dir}/{args.varian}', part, d, S, y_samples, meta, args)
+                    else:
+                        save_predictions_cls(f'{pred_dir}/{args.varian}', part, d, S, P, meta, args)
 
                 with open(result_path, 'a') as f:
-                    f.write(f'iteration {iteration} | {part} | imputasi MAE {mae:.6f} RMSE {rmse:.6f} ACC {acc} ACC_terdekat {acc_n} | '
-                            f'y RMSE {ym["rmse"]:.4f} MAE {ym["mae"]:.4f} R2 {ym["r2"]:.4f} CRPS {ym["crps"]:.4f} '
-                            f'cov {ym["coverage_p5_p95"]:.3f}\n')
+                    f.write(f'iteration {iteration} | {part} | imputasi MAE {mae:.6f} RMSE {rmse:.6f} ACC {acc} '
+                            f'ACC_terdekat {acc_n} | {baris_y}\n')
 
         summary['iterations'].append(it_res)
         with open(f'{pred_dir}/{args.varian}_metrics.json', 'w') as f:

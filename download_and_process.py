@@ -22,10 +22,21 @@ Bedanya dengan DiffPuter:
     lalu dipakai juga untuk val dan test. Di DiffPuter, MAR_mask dipanggil terpisah
     untuk train dan test sehingga mekanismenya berbeda.
 
+Dataset (fokus MIXED-TYPE; full numerik seperti California tidak dipakai di paper ini):
+  regresi     : bike (UCI 275), news (UCI 332), house (House Sales King County, Kaggle — unduh manual)
+  klasifikasi : shoppers (UCI 468), adult (UCI 2), default (UCI 350)
+
+House Sales (manual): unduh kc_house_data.csv dari Kaggle "House Sales in King County, USA"
+  (kaggle.com/datasets/harlfoxem/housesalesprediction), simpan di datasets/house/kc_house_data.csv,
+  lalu: python download_and_process.py --data house
+
 Pemakaian:
-  python download_and_split.py                 # semua dataset (news, bike, shoppers)
+  python download_and_split.py                 # semua dataset UCI di NAME_URL_DICT_UCI
   python download_and_split.py --data bike     # satu dataset saja
   python download_and_process.py --data shoppers   # klasifikasi biner (task_type = classification)
+  python download_and_split.py --data adult    # klasifikasi biner, 32.561 baris (adult.data saja, seperti DiffPuter)
+  python download_and_split.py --data default  # klasifikasi biner, 30.000 baris (file .xls -> butuh xlrd:
+                                               #   pip install xlrd)
   python download_and_split.py --no_csv        # simpan indeks split saja, tanpa CSV
   python download_and_split.py --only_mask     # buat ulang mask saja (data & split sudah ada)
   python download_and_split.py --ratios 0.3    # ratio tertentu saja
@@ -49,6 +60,14 @@ NAME_URL_DICT_UCI = {
     # 'bike': 'https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip',
     # klasifikasi (sama dengan repo DiffPuter)
     'shoppers': 'https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip',
+    'adult': 'https://archive.ics.uci.edu/static/public/2/adult.zip',
+    'default': 'https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip',
+}
+
+# dataset yang TIDAK diunduh otomatis: file disiapkan manual di datasets/{nama}/
+MANUAL_FILES = {
+    'house': ('kc_house_data.csv',
+              'https://www.kaggle.com/datasets/harlfoxem/housesalesprediction (House Sales in King County, USA)'),
 }
 
 SPLIT_RATIO = (0.7, 0.1, 0.2)       # train / val / test
@@ -65,6 +84,15 @@ def unzip_file(zip_filepath, dest_path):
 
 
 def download_from_uci(name):
+    if name in MANUAL_FILES:                                   # unduh manual (mis. Kaggle butuh login)
+        fname, src = MANUAL_FILES[name]
+        try:
+            find_file(f'{DATA_DIR}/{name}', fname)
+            print(f'{name}: memakai {fname} yang sudah ada di {DATA_DIR}/{name}/')
+            return
+        except FileNotFoundError:
+            raise SystemExit(f'{fname} belum ada. Unduh manual dari {src}\n'
+                             f'lalu simpan di {DATA_DIR}/{name}/{fname}')
     print(f'Start processing dataset {name} from UCI.')
     save_dir = f'{DATA_DIR}/{name}'
     zip_path = f'{save_dir}/{name}.zip'
@@ -104,7 +132,7 @@ def save_data_and_info(name, df, num_cols, cat_cols, target, log_target, extra=N
         'task_type': task_type,
         'log_target': log_target,
         'n_rows': int(df.shape[0]),
-        'source': NAME_URL_DICT_UCI.get(name, ''),
+        'source': NAME_URL_DICT_UCI.get(name, MANUAL_FILES.get(name, ('', ''))[1]),
     }
     if extra:
         info.update(extra)
@@ -180,6 +208,31 @@ def process_bike():
     return save_data_and_info('bike', df, num_cols, cat_cols, target, log_target=True)
 
 
+def process_house():
+    """
+    House Sales in King County, USA (Kaggle; juga di benchmark reg_cat Grinsztajn dkk., NeurIPS 2022),
+    21.613 baris, REGRESI, MIXED-TYPE: 13 numerik + 5 kategorik.
+      - target  : price (dolar) -> log_target = true (sama dengan bike/news, standar-log saat dimuat)
+      - dibuang : id (pengenal), date (tanggal jual; tidak dipakai)
+      - kategorik: waterfront (0/1), view (0-4), condition (1-5), grade (1-13), zipcode (~70 kode pos)
+      - numerik : bedrooms, bathrooms, sqft_living, sqft_lot, floors, sqft_above, sqft_basement,
+                  yr_built, yr_renovated, lat, long, sqft_living15, sqft_lot15
+    Tidak ada baris yang dibuang (data ini tidak punya NaN).
+    """
+    path = find_file(f'{DATA_DIR}/house', 'kc_house_data.csv')
+    df = pd.read_csv(path)
+    num_cols = ['bedrooms', 'bathrooms', 'sqft_living', 'sqft_lot', 'floors', 'sqft_above', 'sqft_basement',
+                'yr_built', 'yr_renovated', 'lat', 'long', 'sqft_living15', 'sqft_lot15']
+    cat_cols = ['waterfront', 'view', 'condition', 'grade', 'zipcode']
+    target = 'price'
+    miss = [c for c in num_cols + cat_cols + [target] if c not in df.columns]
+    if miss:
+        raise SystemExit(f'kolom tidak ditemukan di {path}: {miss} (pastikan file kc_house_data.csv versi Kaggle)')
+    for c in cat_cols:
+        df[c] = df[c].astype(int)
+    return save_data_and_info('house', df, num_cols, cat_cols, target, log_target=True)
+
+
 def process_shoppers():
     """
     Online Shoppers Purchasing Intention (UCI 468), 12.330 baris, KLASIFIKASI biner.
@@ -199,6 +252,83 @@ def process_shoppers():
     df['Weekend'] = df['Weekend'].astype(str).str.strip().str.lower().map({'true': 1, 'false': 0})
 
     return save_data_and_info('shoppers', df, num_cols, cat_cols, target, log_target=False,
+                              task_type='classification')
+
+
+ADULT_COLS = ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation',
+              'relationship', 'race', 'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country',
+              'income']
+
+
+def process_adult():
+    """
+    Adult / Census Income (UCI 2), KLASIFIKASI biner: income > 50K.
+    Sama dengan process_adult DiffPuter: HANYA adult.data (32.561 baris); adult.test tidak dipakai. Split 70/10/20
+    dibuat oleh skrip ini. Kolom sama dengan DiffPuter/TabSyn (Info/adult.json):
+      - numerik  (6): age, fnlwgt, education-num, capital-gain, capital-loss, hours-per-week
+      - kategorik(8): workclass, education, marital-status, occupation, relationship, race, sex, native-country
+      - target      : income (>50K = 1, <=50K = 0)
+    Nilai '?' (workclass, occupation, native-country) DIPERTAHANKAN sebagai kategori sendiri '?', seperti
+    DiffPuter/TabSyn. Alasan: nilai aslinya memang tidak diketahui, sehingga kalau dijadikan NaN tidak ada
+    kebenaran untuk menilai imputasi; data_loader & mask juga tidak perlu menangani NaN asli. Tidak ada baris dibuang.
+    """
+    path = find_file(f'{DATA_DIR}/adult', 'adult.data')
+    df = pd.read_csv(path, header=None, names=ADULT_COLS, skipinitialspace=True)
+    df = df.dropna(how='all').reset_index(drop=True)          # baris kosong di akhir file (bila ada)
+    for c in df.columns:
+        if df[c].dtype == object:
+            df[c] = df[c].astype(str).str.strip()
+
+    target = 'income'
+    lab = df[target].str.rstrip('.')
+    if not lab.isin(['>50K', '<=50K']).all():
+        raise SystemExit(f'label income tak dikenal: {sorted(set(lab) - {">50K", "<=50K"})}')
+    df[target] = (lab == '>50K').astype(int)
+
+    num_cols = ['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']
+    cat_cols = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex',
+                'native-country']
+    for c in num_cols:
+        df[c] = pd.to_numeric(df[c])
+    n_tanya = {c: int((df[c] == '?').sum()) for c in cat_cols if (df[c] == '?').any()}
+    if n_tanya:
+        print(f"  nilai '?' (dipertahankan sebagai kategori): {n_tanya}")
+    return save_data_and_info('adult', df, num_cols, cat_cols, target, log_target=False,
+                              task_type='classification')
+
+
+def baca_default(path):
+    """File UCI berformat .xls, sheet 'Data' (baris 1 = judul, baris 2 = nama kolom), seperti DiffPuter. Butuh xlrd."""
+    try:
+        return pd.read_excel(path, sheet_name='Data', header=1)
+    except ImportError as e:
+        raise SystemExit(f'Membaca {path} butuh paket xlrd: pip install xlrd\n({e})')
+
+
+def process_default():
+    """
+    Default of Credit Card Clients (UCI 350, Taiwan 2005), 30.000 baris, KLASIFIKASI biner.
+    Kolom sama dengan DiffPuter/TabSyn (Info/default.json); ID dibuang.
+      - numerik (14): LIMIT_BAL, AGE, BILL_AMT1-6, PAY_AMT1-6
+      - kategorik(9): SEX, EDUCATION, MARRIAGE, PAY_0, PAY_2 - PAY_6 (status pembayaran bulanan)
+      - target      : 'default payment next month' (1 = gagal bayar), disimpan dengan nama 'default'
+    Kode di luar dokumentasi UCI (EDUCATION 0/5/6, MARRIAGE 0, PAY -2/0) dibiarkan apa adanya, seperti DiffPuter.
+    Data ini tidak punya NaN; tidak ada baris dibuang.
+    """
+    path = find_file(f'{DATA_DIR}/default', 'default of credit card clients.xls')
+    df = baca_default(path)
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.rename(columns={'default payment next month': 'default'}).drop(columns=['ID'])
+
+    num_cols = ['LIMIT_BAL', 'AGE'] + [f'BILL_AMT{i}' for i in range(1, 7)] + [f'PAY_AMT{i}' for i in range(1, 7)]
+    cat_cols = ['SEX', 'EDUCATION', 'MARRIAGE', 'PAY_0'] + [f'PAY_{i}' for i in range(2, 7)]
+    target = 'default'
+    miss = [c for c in num_cols + cat_cols + [target] if c not in df.columns]
+    if miss:
+        raise SystemExit(f'kolom tidak ditemukan di {path}: {miss}')
+    for c in cat_cols + [target]:
+        df[c] = df[c].astype(int)
+    return save_data_and_info('default', df, num_cols, cat_cols, target, log_target=False,
                               task_type='classification')
 
 
@@ -356,7 +486,8 @@ def make_mar_masks(name, ratios=MAR_RATIOS, seeds=SEEDS):
 # --------------------------------------------------------------------------
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Download, split, dan mask MAR dataset Paper 2')
-    parser.add_argument('--data', type=str, default='all', help="'all' atau salah satu: news, bike, shoppers")
+    parser.add_argument('--data', type=str, default='all',
+                        help="'all' (dataset UCI) atau salah satu: news, bike, shoppers, house, adult, default")
     parser.add_argument('--no_download', action='store_true', help='lewati unduhan (zip sudah ada)')
     parser.add_argument('--no_csv', action='store_true', help='simpan indeks split saja, tanpa CSV')
     parser.add_argument('--only_mask', action='store_true', help='buat mask saja (data dan split sudah ada)')

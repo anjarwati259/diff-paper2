@@ -12,6 +12,10 @@ Lalu menyiapkan matriks untuk diffusion, mengikuti dataset.py + main.py DiffPute
   - Standardisasi pakai mean/std nilai TERAMATI di train, lalu dibagi 2 (main.py baris 58)
   - y di-log (log1p) dulu bila log_target = true, lalu distandardisasi
 
+SKALA EVALUASI (satu-satunya; keputusan 2 Nov 2026): STANDAR-LOG = z-score dari log1p(y) (atau y bila
+log_target = false) dengan mean/std train = skala tempat model dilatih. Nilai asli TIDAK dipakai untuk metrik.
+  inverse_y() -> skala standar-log (kolom y matriks x 2); y_true_z() -> y sebenarnya di skala yang sama.
+
 Tambahan dibanding DiffPuter:
   - Kolom y ikut di matriks (kolom terakhir).
   - Mask y: train = False (y diketahui), val/test = True (y ditebak).
@@ -277,6 +281,22 @@ def y_true_index(df, meta):
     return np.array([idx[v] for v in df[meta['target']].tolist()], dtype=np.int64)
 
 
+def load_ids(path, n):
+    """Indeks baris asli (kolom 'id' di CSV hasil). Bila file tidak ada / rusak (mis. terbaca sebagai pickle/objek)
+    / panjangnya tidak cocok -> peringatan dan pakai 0..n-1 (hanya label, tidak memengaruhi model & metrik)."""
+    try:
+        a = np.load(path, allow_pickle=False)
+        if a.ndim == 1 and len(a) == n and np.issubdtype(a.dtype, np.integer):
+            return a
+        why = f'dtype {a.dtype}, bentuk {a.shape} (harap {n} bilangan bulat)'
+    except FileNotFoundError:
+        why = 'file tidak ada'
+    except Exception as e:                                   # pickle/objek, null byte, terpotong, dll.
+        why = f'{type(e).__name__}: {str(e)[:80]}'
+    print(f'[PERINGATAN] {path} tidak bisa dipakai ({why}) -> kolom id = 0..{n - 1}. Jalankan cek_data.py.')
+    return np.arange(n)
+
+
 def clip_bounds(meta):
     return meta['clip_lo'], meta['clip_hi']
 
@@ -297,13 +317,21 @@ def inverse_transform(Xs, meta):
     return out
 
 
-def inverse_y(y_std, meta):
-    """Kolom y terstandardisasi (array apa pun bentuknya) -> skala asli. Hanya regresi."""
+def inverse_y(y_model, meta):
+    """Kolom y skala MODEL (z/2, array bentuk apa pun) -> skala EVALUASI standar-log:
+    (log1p(y) - mean_train) / std_train (tanpa log bila log_target = false). Hanya regresi."""
     if meta.get('task', 'regression') == 'classification':
         raise ValueError('inverse_y hanya untuk regresi; klasifikasi memakai blok one-hot meta["y_cols"]')
+    return np.asarray(y_model, dtype=np.float64) * 2.0
+
+
+def y_true_z(df, meta):
+    """y sebenarnya (DataFrame bagian mana pun) -> skala standar-log (sama dengan inverse_y). Hanya regresi."""
     i = meta['y_idx']
-    y = y_std * 2.0 * meta['std'][i] + meta['mean'][i]
-    return np.expm1(y) if meta['log_target'] else y
+    y = df[meta['target']].to_numpy(dtype=np.float64)
+    if meta['log_target']:
+        y = np.log1p(y)
+    return (y - meta['mean'][i]) / meta['std'][i]
 
 
 # --------------------------------------------------------------------------
@@ -390,6 +418,9 @@ def check(name, seed, ratio, verbose=True, num_transform='none'):
             y_ok = np.allclose(back[meta['target']].to_numpy(float), df[meta['target']].to_numpy(float),
                                rtol=1e-6, atol=1e-6)
         ok(f'{part}: kembali ke skala asli (numerik, kategorik, y)', num_ok and cat_ok and y_ok)
+        if meta['task'] == 'regression':
+            ok(f'{part}: y_true_z = inverse_y(kolom y) (skala evaluasi standar-log)',
+               np.allclose(y_true_z(df, meta), inverse_y(d['X_true'][:, meta['y_idx']], meta)))
 
     # transformasi fitur numerik: skala model -> skala asli harus kembali ke nilai asli (sel teramati train)
     if meta.get('tf') is not None:
@@ -410,8 +441,14 @@ def check(name, seed, ratio, verbose=True, num_transform='none'):
     ok('kode biner tidak valid dipetakan ke kategori valid', dec_ok)
 
     # urutan baris mask cocok dengan urutan split
-    idx = np.load(f"{DATA_DIR}/{name}/splits/seed{seed}/train_idx.npy")
-    ok('urutan baris train cocok dengan train_idx.npy', len(idx) == len(data['train']['df']))
+    for part in PARTS:
+        pth = f"{DATA_DIR}/{name}/splits/seed{seed}/{part}_idx.npy"
+        try:
+            idx = np.load(pth, allow_pickle=False)
+            good = idx.ndim == 1 and len(idx) == len(data[part]['df']) and np.issubdtype(idx.dtype, np.integer)
+            ok(f'{part}_idx.npy terbaca & cocok', good, f'{idx.dtype} {idx.shape}')
+        except Exception as e:
+            ok(f'{part}_idx.npy terbaca & cocok', False, f'{type(e).__name__} (file rusak?)')
 
     if verbose:
         print(f"  Hasil: {sum(results)}/{len(results)} cek OK")

@@ -43,7 +43,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from data_loader import load_split, inverse_y, clip_bounds
+from data_loader import load_split, inverse_y, y_true_z, clip_bounds
 from run_diffputer import (MLPDiffusion, Precond, run_trials, imputation_metrics,
                            y_metrics, save_predictions)
 
@@ -177,7 +177,7 @@ def build_parser(description):
     p.add_argument('--parts', nargs='+', default=['test'])
     p.add_argument('--eval_last_only', action='store_true')
     p.add_argument('--quick', action='store_true')
-    p.add_argument('--out_dir', default='results')
+    p.add_argument('--out_dir', default='results_zlog')
     p.add_argument('--gpu', type=int, default=0)
     return p
 
@@ -270,7 +270,7 @@ def run(args, train_fn, info, group):
                 y_samples = inverse_y(S[:, :, yi], meta)
                 np.save(f'{pred_dir}/{args.varian}_{part}_samples_iter{iteration}.npy',
                         y_samples.T.astype(np.float32))          # sampel y per iterasi (diagnosa)
-                ym = y_metrics(d['df'][meta['target']].to_numpy(dtype=np.float64), y_samples)
+                ym = y_metrics(y_true_z(d['df'], meta), y_samples)          # skala standar-log
                 print(f'Out-of-sample ({part}) → MAE={mae:.6f}  RMSE={rmse:.6f}  ACC={acc}  ACC_terdekat={acc_n}')
                 print(f'Prediksi y ({part}) → RMSE={ym["rmse"]:.4f}  MAE={ym["mae"]:.4f}  R2={ym["r2"]:.4f}  '
                       f'CRPS={ym["crps"]:.4f}  cov p5-95={ym["coverage_p5_p95"]:.3f}  '
@@ -301,6 +301,7 @@ def main():
     p = build_parser('Metode usulan: DiffPuter + DWA satu arah')
     p.add_argument('--no_dwa', dest='dwa', action='store_false', help='matikan DWA (untuk ablation)')
     p.add_argument('--dwa_T', type=float, default=2.0, help='temperatur DWA (paper: 2)')
+    p.set_defaults(num_trials=10)            # ablasi: N = 10 di semua baris (sama dengan metode usulan)
     args = p.parse_args()
     if args.varian == 'auto':
         args.varian = 'usulan_dwa' if args.dwa else 'usulan_tanpa_modifikasi'
