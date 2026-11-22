@@ -1,0 +1,70 @@
+{
+  "imputer": "knn",
+  "plugin_hyperimpute": null,
+  "dataset": "house",
+  "task": "regression",
+  "mech": "MAR",
+  "ratio": 0.3,
+  "seed": 0,
+  "aturan": "fit di train saja; val/test hanya transform; y tidak dipakai",
+  "imputasi_time_s": 76.72983407974243,
+  "kolom_numerik": [
+    "bedrooms",
+    "bathrooms",
+    "sqft_living",
+    "sqft_lot",
+    "floors",
+    "sqft_above",
+    "sqft_basement",
+    "yr_built",
+    "yr_renovated",
+    "lat",
+    "long",
+    "sqft_living15",
+    "sqft_lot15"
+  ],
+  "kolom_kategorik": [
+    "waterfront",
+    "view",
+    "condition",
+    "grade",
+    "zipcode"
+  ],
+  "train": {
+    "mae": 0.37303938152698174,
+    "rmse": 0.650864305936614,
+    "acc": 0.7799083117400837,
+    "n_sel_numerik": 56536,
+    "n_sel_kategorik": 25085
+  },
+  "desimal_per_kolom": {
+    "bedrooms": 0,
+    "bathrooms": 2,
+    "sqft_living": 0,
+    "sqft_lot": 0,
+    "floors": 1,
+    "sqft_above": 0,
+    "sqft_basement": 0,
+    "yr_built": 0,
+    "yr_renovated": 0,
+    "lat": 4,
+    "long": 3,
+    "sqft_living15": 0,
+    "sqft_lot15": 0
+  },
+  "val": {
+    "mae": 0.38682000773401626,
+    "rmse": 0.6784790505307758,
+    "acc": 0.7759866592551418,
+    "n_sel_numerik": 8083,
+    "n_sel_kategorik": 3598
+  },
+  "test": {
+    "mae": 0.380380999407335,
+    "rmse": 0.6718603555485007,
+    "acc": 0.7817174515235457,
+    "n_sel_numerik": 16243,
+    "n_sel_kategorik": 7220
+  },
+  "total_time_s": 77.17516279220581
+}

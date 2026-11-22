@@ -1,0 +1,58 @@
+{
+  "imputer": "missforest",
+  "plugin_hyperimpute": "sklearn_missforest",
+  "dataset": "bike",
+  "task": "regression",
+  "mech": "MAR",
+  "ratio": 0.7,
+  "seed": 3,
+  "aturan": "fit di train saja; val/test hanya transform; y tidak dipakai",
+  "imputasi_time_s": 89.91301846504211,
+  "kolom_numerik": [
+    "yr",
+    "mnth",
+    "hr",
+    "temp",
+    "atemp",
+    "hum",
+    "windspeed"
+  ],
+  "kolom_kategorik": [
+    "season",
+    "holiday",
+    "weekday",
+    "workingday",
+    "weathersit"
+  ],
+  "train": {
+    "mae": 0.8164261753079156,
+    "rmse": 1.111378390382953,
+    "acc": 0.5415994320015491,
+    "n_sel_numerik": 55772,
+    "n_sel_kategorik": 46479
+  },
+  "desimal_per_kolom": {
+    "yr": 0,
+    "mnth": 0,
+    "hr": 0,
+    "temp": 2,
+    "atemp": 4,
+    "hum": 2,
+    "windspeed": 4
+  },
+  "val": {
+    "mae": 0.8132572410777369,
+    "rmse": 1.1084974390043292,
+    "acc": 0.5374291679093349,
+    "n_sel_numerik": 7939,
+    "n_sel_kategorik": 6706
+  },
+  "test": {
+    "mae": 0.8250653423412292,
+    "rmse": 1.1169340933856298,
+    "acc": 0.5386617100371747,
+    "n_sel_numerik": 15858,
+    "n_sel_kategorik": 13450
+  },
+  "total_time_s": 90.29817080497742
+}

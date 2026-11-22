@@ -1,0 +1,99 @@
+{
+  "method": "twostage_knn_svm",
+  "imputer": "knn",
+  "prediktor": "SVR",
+  "task": "regression",
+  "dataset": "house",
+  "mech": "MAR",
+  "ratio": 0.3,
+  "seed": 0,
+  "args": {
+    "imputer": "knn",
+    "dataset": "house",
+    "ratio": 0.3,
+    "seed": 0,
+    "mech": "MAR",
+    "out_dir": "D:\\RETNO\\diff-paper2\\baselines_eksternal\\results_zlog",
+    "imp_dir": "D:\\RETNO\\diff-paper2\\baselines_eksternal\\results",
+    "thr_objective": "f1_macro"
+  },
+  "val": {
+    "rmse": 0.43481428155496954,
+    "mae": 0.3120951594726571,
+    "r2": 0.8100890729753426,
+    "crps": NaN
+  },
+  "test": {
+    "rmse": 0.46337989124840107,
+    "mae": 0.3242451046203836,
+    "r2": 0.7962702456713013,
+    "crps": NaN
+  },
+  "svm_time_s": 7.0036070346832275,
+  "svm": {
+    "params": {
+      "C": 1.0,
+      "cache_size": 200,
+      "coef0": 0.0,
+      "degree": 3,
+      "epsilon": 0.1,
+      "gamma": "scale",
+      "kernel": "rbf",
+      "max_iter": -1,
+      "shrinking": true,
+      "tol": 0.001,
+      "verbose": false
+    },
+    "kolom_onehot": [],
+    "kolom_numerik": [
+      "bedrooms",
+      "bathrooms",
+      "sqft_living",
+      "sqft_lot",
+      "floors",
+      "sqft_above",
+      "sqft_basement",
+      "yr_built",
+      "yr_renovated",
+      "lat",
+      "long",
+      "sqft_living15",
+      "sqft_lot15",
+      "waterfront",
+      "view",
+      "condition",
+      "grade",
+      "zipcode"
+    ],
+    "n_fitur_model": 18,
+    "standardisasi_y": {
+      "mean": 13.043176708110034,
+      "std": 0.5239184594204067,
+      "log1p": true
+    }
+  },
+  "imputasi": {
+    "train": {
+      "mae": 0.37303938152698174,
+      "rmse": 0.650864305936614,
+      "acc": 0.7799083117400837,
+      "n_sel_numerik": 56536,
+      "n_sel_kategorik": 25085
+    },
+    "val": {
+      "mae": 0.38682000773401626,
+      "rmse": 0.6784790505307758,
+      "acc": 0.7759866592551418,
+      "n_sel_numerik": 8083,
+      "n_sel_kategorik": 3598
+    },
+    "test": {
+      "mae": 0.380380999407335,
+      "rmse": 0.6718603555485007,
+      "acc": 0.7817174515235457,
+      "n_sel_numerik": 16243,
+      "n_sel_kategorik": 7220
+    }
+  },
+  "total_time_s": 7.2460777759552
+}

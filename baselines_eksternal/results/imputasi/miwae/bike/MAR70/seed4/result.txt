@@ -1,0 +1,1 @@
+test | imputasi miwae | MAE 0.9521 RMSE 1.2262 ACC 0.6123 | waktu 830s

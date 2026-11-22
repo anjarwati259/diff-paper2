@@ -1,0 +1,1 @@
+test | twostage_knn_svm | RMSE 0.7091 MAE 0.5117 R2 0.4941 | waktu 5s

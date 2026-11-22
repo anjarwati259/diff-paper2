@@ -1,6 +1,6 @@
 {
-  "mekanisme": "MCAR",
   "ratio": 0.3,
+  "mekanisme": "MCAR",
   "seed": 1,
   "feature_cols": [
     "yr",
@@ -17,8 +17,8 @@
     "weathersit"
   ],
   "proporsi_missing_aktual": {
-    "train": 0.2993355254144403,
-    "val": 0.300680859225163,
-    "test": 0.3020953202915228
+    "train": 0.30070557610631593,
+    "val": 0.29804372842347526,
+    "test": 0.2988348676639816
   }
 }

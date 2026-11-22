@@ -1,0 +1,58 @@
+{
+  "imputer": "mice",
+  "plugin_hyperimpute": "mice",
+  "dataset": "bike",
+  "task": "regression",
+  "mech": "MCAR",
+  "ratio": 0.3,
+  "seed": 0,
+  "aturan": "fit di train saja; val/test hanya transform; y tidak dipakai",
+  "imputasi_time_s": 13.076420068740845,
+  "kolom_numerik": [
+    "yr",
+    "mnth",
+    "hr",
+    "temp",
+    "atemp",
+    "hum",
+    "windspeed"
+  ],
+  "kolom_kategorik": [
+    "season",
+    "holiday",
+    "weekday",
+    "workingday",
+    "weathersit"
+  ],
+  "train": {
+    "mae": 0.8244492383698983,
+    "rmse": 1.161742811641309,
+    "acc": 0.530220081024855,
+    "n_sel_numerik": 25696,
+    "n_sel_kategorik": 18266
+  },
+  "desimal_per_kolom": {
+    "yr": 0,
+    "mnth": 0,
+    "hr": 0,
+    "temp": 2,
+    "atemp": 4,
+    "hum": 2,
+    "windspeed": 4
+  },
+  "val": {
+    "mae": 0.8446918908605467,
+    "rmse": 1.1758238233960931,
+    "acc": 0.5372,
+    "n_sel_numerik": 3624,
+    "n_sel_kategorik": 2500
+  },
+  "test": {
+    "mae": 0.8181366864992239,
+    "rmse": 1.150872120668272,
+    "acc": 0.5311663479923519,
+    "n_sel_numerik": 7228,
+    "n_sel_kategorik": 5230
+  },
+  "total_time_s": 13.496419906616211
+}

@@ -12,7 +12,9 @@ Cara kerja: telusuri folder hasil, ambil setiap {nama}_{val|test}.csv berkolom y
       Coverage min-max ensemble: ideal (N_total - 1)/(N_total + 1), mis. 50 sampel -> 0.961.
       Bila ada {nama}_{part}_pm_ensemble.npy (run_usulan_final.py versi pm) atau {nama}_evalpm_{part}_pm_ensemble.npy
       (eval_ckpt_reg.py): baris '[ensemble pm]' = RMSE/MAE/R2 dari posterior mean ensemble, CRPS/coverage dari gabungan
-      sampel. Ini HASIL UTAMA metode usulan regresi.
+      sampel. Bila ada {nama}_{part}_pm_terakhir.npy (versi 6 Nov): baris '[pm terakhir]' = posterior mean iterasi
+      terakhir (CRPS/coverage dari sampel iterasi terakhir). Baris tanpa akhiran (iterasi terakhir) = rata-rata
+      sampel iterasi terakhir = cara DiffPuter (HASIL UTAMA default sejak 6 Nov); tiga baris lain untuk ablasi.
   - Tanpa sampel (LightGBM, CatBoost, NeuMiss, GRAPE, supMIWAE, dua tahap SVR): y_pred -> log1p -> z;
       RMSE, MAE, R2 saja. (y_pred metode log lama = expm1(prediksi log) -> log1p mengembalikannya persis.)
   - Satu file sampel {nama}_{part}_samples.npy (XGBoost, LightGBM/CatBoost/supMIWAE versi baru): RMSE/MAE/R2 dari
@@ -168,6 +170,21 @@ def main():
                             rows.append({**base, 'metode': metode + ' [ensemble pm]', 'iterasi': -1,
                                          'sumber': f'pm {os.path.basename(pmf)} + sampel iterasi 0-{len(allS) - 1}', **m})
                         break
+                # POSTERIOR MEAN ITERASI TERAKHIR (run_usulan_final.py / run_ablasi.py versi 6 Nov): titik dari pm
+                # iterasi terakhir, CRPS/coverage dari sampel iterasi terakhir saja.
+                pmt = f'{folder}/{prefix}_{part}_pm_terakhir.npy'
+                if not os.path.exists(pmt):          # run lama + eval_ckpt_reg.py: _evalpm_{part}_pm_iter{terakhir}.npy
+                    lama = sorted(glob.glob(f'{folder}/{prefix}_evalpm_{part}_pm_iter*.npy'),
+                                  key=lambda p: int(re.search(r'iter(\d+)\.npy$', p).group(1)))
+                    if lama and int(re.search(r'iter(\d+)\.npy$', lama[-1]).group(1)) == len(allS) - 1:
+                        pmt = lama[-1]
+                if os.path.exists(pmt):
+                    pm = np.load(pmt).astype(np.float64)
+                    if len(pm) == len(y):
+                        m = sample_metrics(y, allS[-1], quantile)
+                        m.update(point_metrics(y, pm))
+                        rows.append({**base, 'metode': metode + ' [pm terakhir]', 'iterasi': -1,
+                                     'sumber': f'pm {os.path.basename(pmt)} + sampel iterasi {len(allS) - 1}', **m})
             elif os.path.exists(samp):
                 S = conv(np.load(samp).T)
                 m = sample_metrics(y, S, quantile)

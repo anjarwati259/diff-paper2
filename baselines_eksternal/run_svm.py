@@ -4,7 +4,7 @@ Regresi -> SVR, klasifikasi -> SVC (tugas dibaca otomatis dari dataset).
 
 ALUR (pemodelan klasik)
   1. Baca results/imputasi/{imputer}/{dataset}/MAR{rr}/seed{k}/imputed_{train,val,test}.csv (nilai asli),
-     hasil run_imputasi.py (mean, mice, missforest, hyperimpute, miwae) atau run_imputasi_diffputer.py (diffputer).
+     hasil run_imputasi.py (mean, knn, mice, missforest, hyperimpute, miwae) atau run_imputasi_diffputer.py (diffputer).
   2. Persiapan fitur, aturan sama dengan model_classification.py / run_xgboost_nan.py:
        kolom kategorik dideteksi dari dtype (teks/bool) -> one-hot drop_first (kolom val/test disamakan ke train),
        lalu StandardScaler yang di-fit di TRAIN.
@@ -14,7 +14,8 @@ ALUR (pemodelan klasik)
        klasifikasi SVC(kernel='rbf', C=1.0, gamma='scale', probability=True); keluaran label kelas asli + peluang.
   4. VAL hanya untuk ambang F1 & temperatur (klasifikasi), sama dengan baseline lain. Laporan di TEST.
   5. Metrik sama dengan metode usulan: regresi RMSE/MAE/R2 (skala standar-log; CRPS = NaN karena SVR hanya
-     memberi prediksi titik), klasifikasi metrics_cls (AUC, F1 ambang val, Acc, Brier, ...).
+     memberi prediksi titik), klasifikasi metrics_cls (AUC, F1 argmax = sama dengan usulan, Acc, Brier, ...;
+     F1 dengan ambang val disimpan sebagai f1_macro_thr / keterangan "[ambang val ...]" di result.txt).
 
 KELUARAN  (results/twostage_{imputer}_svm/{dataset}/MAR{rr}/seed{k}/)
   twostage_{imputer}_svm_{val,test}.csv : id, y_asli, y_pred (nilai asli) [+ y_pred_ambang, p_kelas]
@@ -23,6 +24,7 @@ KELUARAN  (results/twostage_{imputer}_svm/{dataset}/MAR{rr}/seed{k}/)
 
 Pemakaian (dari folder baselines_eksternal, SETELAH run_imputasi.py):
   python run_svm.py --imputer mean --dataset bike --ratio 0.3 --seed 0
+  python run_svm.py --imputer knn --dataset shoppers --ratio 0.3 --seed 0
 """
 
 import os
@@ -44,7 +46,7 @@ os.chdir(PROJECT_DIR)
 from data_loader import load_split, y_true_index, y_true_z, load_ids                  # noqa: E402
 import metrics_cls as mc                                                     # noqa: E402
 
-IMPUTERS = ['mean', 'mice', 'missforest', 'hyperimpute', 'miwae', 'diffputer']
+IMPUTERS = ['mean', 'knn', 'mice', 'missforest', 'hyperimpute', 'miwae', 'diffputer']
 PARTS = ['train', 'val', 'test']
 
 
@@ -77,7 +79,7 @@ def main():
     ap.add_argument('--mech', default='MAR')
     ap.add_argument('--out_dir', default=os.path.join(_HERE, 'results_zlog'),
                     help='folder hasil SVM (bawaan: results_zlog/)')
-    ap.add_argument('--imp_dir', default=os.path.join(_HERE, 'results_zlog'),
+    ap.add_argument('--imp_dir', default=os.path.join(_HERE, 'results'),
                     help='folder induk hasil imputasi tahap 1 (bawaan: results_zlog/; imputasi tidak memakai y)')
     ap.add_argument('--thr_objective', default='f1_macro', choices=['f1_macro', 'f1_weighted'])
     a = ap.parse_args()
@@ -174,9 +176,13 @@ def main():
     with open(f'{out_dir}/{method}_metrics.json', 'w') as f:
         json.dump(summary, f, indent=2, default=str)
     te = summary['test']
-    line = (f"test | {method} | " + (f"Acc {te['y_mentah']['acc']:.4f} F1(macro,ambang) "
-                                     f"{te['y_mentah'].get('f1_macro_thr', te['y_mentah']['f1_macro']):.4f} "
-                                     f"AUC {te['y_mentah']['auc']:.4f} Brier {te['y_mentah']['brier']:.4f}"
+    # Klasifikasi: Acc & F1(macro) = ARGMAX (ambang 0.5), SAMA dengan metode usulan (cls_standar). F1 dengan ambang
+    # dari val dicetak terpisah sebagai keterangan "[ambang val ...]" (versi lama mencetak F1 ambang sebagai F1 utama).
+    ym = te.get('y_mentah', {})                                         # regresi: tidak ada y_mentah
+    thr_txt = (f" [ambang val {summary['ambang']:.3f}: Acc {ym['acc_thr']:.4f} F1(macro) {ym['f1_macro_thr']:.4f}]"
+               if task == 'classification' and 'f1_macro_thr' in ym else '')
+    line = (f"test | {method} | " + (f"Acc {ym['acc']:.4f} F1(macro) {ym['f1_macro']:.4f} "
+                                     f"AUC {ym['auc']:.4f} Brier {ym['brier']:.4f}{thr_txt}"
                                      if task == 'classification' else
                                      f"RMSE {te['rmse']:.4f} MAE {te['mae']:.4f} R2 {te['r2']:.4f}")
             + f" | waktu {summary['total_time_s']:.0f}s\n")

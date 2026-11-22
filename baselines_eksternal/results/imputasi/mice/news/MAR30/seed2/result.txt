@@ -1,0 +1,1 @@
+test | imputasi mice | MAE 0.7071 RMSE 1.0176 ACC nan | waktu 1131s

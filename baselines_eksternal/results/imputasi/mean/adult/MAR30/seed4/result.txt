@@ -1,0 +1,1 @@
+test | imputasi mean | MAE 0.6321 RMSE 1.0088 ACC 0.6442 | waktu 2s

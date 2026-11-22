@@ -1,0 +1,59 @@
+{
+  "imputer": "miwae",
+  "plugin_hyperimpute": "miwae",
+  "dataset": "adult",
+  "task": "classification",
+  "mech": "MAR",
+  "ratio": 0.3,
+  "seed": 4,
+  "aturan": "fit di train saja; val/test hanya transform; y tidak dipakai",
+  "imputasi_time_s": 335.5650267601013,
+  "kolom_numerik": [
+    "age",
+    "fnlwgt",
+    "education-num",
+    "capital-gain",
+    "capital-loss",
+    "hours-per-week"
+  ],
+  "kolom_kategorik": [
+    "workclass",
+    "education",
+    "marital-status",
+    "occupation",
+    "relationship",
+    "race",
+    "sex",
+    "native-country"
+  ],
+  "train": {
+    "mae": 0.5925407766620631,
+    "rmse": 1.043717419015329,
+    "acc": 0.5647710472065469,
+    "n_sel_numerik": 47891,
+    "n_sel_kategorik": 48023
+  },
+  "desimal_per_kolom": {
+    "age": 0,
+    "fnlwgt": 0,
+    "education-num": 0,
+    "capital-gain": 0,
+    "capital-loss": 0,
+    "hours-per-week": 0
+  },
+  "val": {
+    "mae": 0.5917467405496454,
+    "rmse": 1.0212492094803571,
+    "acc": 0.5733468091250361,
+    "n_sel_numerik": 6926,
+    "n_sel_kategorik": 6926
+  },
+  "test": {
+    "mae": 0.5905699551810738,
+    "rmse": 1.047862309982233,
+    "acc": 0.5674087135405187,
+    "n_sel_numerik": 13666,
+    "n_sel_kategorik": 13611
+  },
+  "total_time_s": 336.44673800468445
+}

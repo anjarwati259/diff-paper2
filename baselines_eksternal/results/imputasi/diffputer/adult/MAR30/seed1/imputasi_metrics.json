@@ -1,0 +1,71 @@
+{
+  "imputer": "diffputer",
+  "dataset": "adult",
+  "task": "classification",
+  "mech": "MAR",
+  "ratio": 0.3,
+  "seed": 1,
+  "aturan": "EM dilatih di fitur train saja; val/test hanya diimputasi; y tidak dipakai",
+  "setting": {
+    "max_epochs": 10001,
+    "patience": 500,
+    "batch_size": 4096,
+    "lr": 0.0001,
+    "hid_dim": 1024,
+    "num_steps": 50,
+    "resample": 20,
+    "num_trials": 10,
+    "chunk_rows": 50000,
+    "max_iter": 5,
+    "clip": false
+  },
+  "imputasi_time_s": 8546.698528766632,
+  "kolom_numerik": [
+    "age",
+    "fnlwgt",
+    "education-num",
+    "capital-gain",
+    "capital-loss",
+    "hours-per-week"
+  ],
+  "kolom_kategorik": [
+    "workclass",
+    "education",
+    "marital-status",
+    "occupation",
+    "relationship",
+    "race",
+    "sex",
+    "native-country"
+  ],
+  "desimal_per_kolom": {
+    "age": 0,
+    "fnlwgt": 0,
+    "education-num": 0,
+    "capital-gain": 0,
+    "capital-loss": 0,
+    "hours-per-week": 0
+  },
+  "train": {
+    "mae": 0.7209117157564402,
+    "rmse": 0.9867181012700604,
+    "acc": 0.7021887763498451,
+    "n_sel_numerik": 28795,
+    "n_sel_kategorik": 66841
+  },
+  "val": {
+    "mae": 0.7006966573650092,
+    "rmse": 0.9564037023815967,
+    "acc": 0.7073893711623968,
+    "n_sel_numerik": 4173,
+    "n_sel_kategorik": 9446
+  },
+  "test": {
+    "mae": 0.7366552821676396,
+    "rmse": 1.0011332530775108,
+    "acc": 0.6983112496752403,
+    "n_sel_numerik": 8176,
+    "n_sel_kategorik": 19245
+  },
+  "total_time_s": 8547.730782032013
+}

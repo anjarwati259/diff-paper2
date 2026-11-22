@@ -1,0 +1,1 @@
+test | neumiss | RMSE 0.6255 MAE 0.4271 R2 0.6144 CRPS nan | waktu 6927s

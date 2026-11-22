@@ -1,0 +1,93 @@
+{
+  "method": "twostage_knn_svm",
+  "imputer": "knn",
+  "prediktor": "SVR",
+  "task": "regression",
+  "dataset": "bike",
+  "mech": "MAR",
+  "ratio": 0.3,
+  "seed": 0,
+  "args": {
+    "imputer": "knn",
+    "dataset": "bike",
+    "ratio": 0.3,
+    "seed": 0,
+    "mech": "MAR",
+    "out_dir": "D:\\RETNO\\diff-paper2\\baselines_eksternal\\results_zlog",
+    "imp_dir": "D:\\RETNO\\diff-paper2\\baselines_eksternal\\results",
+    "thr_objective": "f1_macro"
+  },
+  "val": {
+    "rmse": 0.5617996007410084,
+    "mae": 0.4095190519282601,
+    "r2": 0.6825960946825895,
+    "crps": NaN
+  },
+  "test": {
+    "rmse": 0.5705207711617902,
+    "mae": 0.4176932649924755,
+    "r2": 0.6819501932320344,
+    "crps": NaN
+  },
+  "svm_time_s": 4.234926223754883,
+  "svm": {
+    "params": {
+      "C": 1.0,
+      "cache_size": 200,
+      "coef0": 0.0,
+      "degree": 3,
+      "epsilon": 0.1,
+      "gamma": "scale",
+      "kernel": "rbf",
+      "max_iter": -1,
+      "shrinking": true,
+      "tol": 0.001,
+      "verbose": false
+    },
+    "kolom_onehot": [],
+    "kolom_numerik": [
+      "yr",
+      "mnth",
+      "hr",
+      "temp",
+      "atemp",
+      "hum",
+      "windspeed",
+      "season",
+      "holiday",
+      "weekday",
+      "workingday",
+      "weathersit"
+    ],
+    "n_fitur_model": 12,
+    "standardisasi_y": {
+      "mean": 4.581295753997944,
+      "std": 1.4148807190295591,
+      "log1p": true
+    }
+  },
+  "imputasi": {
+    "train": {
+      "mae": 0.5562742859363825,
+      "rmse": 0.8390180393919009,
+      "acc": 0.8711995863495346,
+      "n_sel_numerik": 24258,
+      "n_sel_kategorik": 19340
+    },
+    "val": {
+      "mae": 0.5407282212331597,
+      "rmse": 0.8273453424604368,
+      "acc": 0.8706680957484816,
+      "n_sel_numerik": 3446,
+      "n_sel_kategorik": 2799
+    },
+    "test": {
+      "mae": 0.5564269896111791,
+      "rmse": 0.8386682212292033,
+      "acc": 0.8665821868211441,
+      "n_sel_numerik": 6919,
+      "n_sel_kategorik": 5524
+    }
+  },
+  "total_time_s": 4.39766526222229
+}

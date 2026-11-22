@@ -631,8 +631,13 @@ def main():
     with open(f'{pred_dir}/{name}_metrics.json', 'w') as f:
         json.dump(summary, f, indent=2, default=str)
     te = summary['test']
-    line = (f"test | {name} | " + (f"Acc {te['y_mentah']['acc']:.4f} F1(macro,ambang) {te['y_mentah'].get('f1_macro_thr', te['y_mentah']['f1_macro']):.4f} "
-                                   f"AUC {te['y_mentah']['auc']:.4f} Brier {te['y_mentah']['brier']:.4f}"
+    # Klasifikasi: Acc & F1(macro) = ARGMAX (ambang 0.5), SAMA dengan metode usulan (cls_standar). F1 dengan ambang
+    # dari val dicetak terpisah sebagai keterangan "[ambang val ...]" (versi lama mencetak F1 ambang sebagai F1 utama).
+    ym = te.get('y_mentah', {})                                         # regresi: tidak ada y_mentah
+    thr_txt = (f" [ambang val {summary['ambang']:.3f}: Acc {ym['acc_thr']:.4f} F1(macro) {ym['f1_macro_thr']:.4f}]"
+               if task == 'classification' and 'f1_macro_thr' in ym else '')
+    line = (f"test | {name} | " + (f"Acc {ym['acc']:.4f} F1(macro) {ym['f1_macro']:.4f} "
+                                   f"AUC {ym['auc']:.4f} Brier {ym['brier']:.4f}{thr_txt}"
                                    if task == 'classification' else
                                    f"RMSE {te['rmse']:.4f} MAE {te['mae']:.4f} R2 {te['r2']:.4f} CRPS {te['crps']:.4f}")
             + f" | waktu {summary['total_time_s']:.0f}s\n")

@@ -1,0 +1,66 @@
+{
+  "imputer": "mean",
+  "plugin_hyperimpute": null,
+  "dataset": "shoppers",
+  "task": "classification",
+  "mech": "MAR",
+  "ratio": 0.7,
+  "seed": 2,
+  "aturan": "fit di train saja; val/test hanya transform; y tidak dipakai",
+  "imputasi_time_s": 1.3816258907318115,
+  "kolom_numerik": [
+    "Administrative",
+    "Administrative_Duration",
+    "Informational",
+    "Informational_Duration",
+    "ProductRelated",
+    "ProductRelated_Duration",
+    "BounceRates",
+    "ExitRates",
+    "PageValues",
+    "SpecialDay"
+  ],
+  "kolom_kategorik": [
+    "Month",
+    "OperatingSystems",
+    "Browser",
+    "Region",
+    "TrafficType",
+    "VisitorType",
+    "Weekend"
+  ],
+  "train": {
+    "mae": 0.6681497214693815,
+    "rmse": 1.3302855236386646,
+    "acc": 0.5401029021983651,
+    "n_sel_numerik": 57797,
+    "n_sel_kategorik": 44897
+  },
+  "desimal_per_kolom": {
+    "Administrative": 0,
+    "Administrative_Duration": 9,
+    "Informational": 0,
+    "Informational_Duration": 9,
+    "ProductRelated": 0,
+    "ProductRelated_Duration": 9,
+    "BounceRates": 9,
+    "ExitRates": 9,
+    "PageValues": 9,
+    "SpecialDay": 1
+  },
+  "val": {
+    "mae": 0.6899546340192194,
+    "rmse": 1.3751279950744255,
+    "acc": 0.5309085232594443,
+    "n_sel_numerik": 8202,
+    "n_sel_kategorik": 6406
+  },
+  "test": {
+    "mae": 0.6629211789942462,
+    "rmse": 1.2551352721117786,
+    "acc": 0.5456178722074676,
+    "n_sel_numerik": 16493,
+    "n_sel_kategorik": 12802
+  },
+  "total_time_s": 1.822108507156372
+}

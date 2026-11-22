@@ -1,0 +1,1 @@
+test | imputasi knn | MAE 0.4759 RMSE 1.0180 ACC 0.5077 | waktu 39s

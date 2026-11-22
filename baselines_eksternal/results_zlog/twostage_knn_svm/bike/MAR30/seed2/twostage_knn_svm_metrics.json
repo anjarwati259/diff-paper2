@@ -1,0 +1,93 @@
+{
+  "method": "twostage_knn_svm",
+  "imputer": "knn",
+  "prediktor": "SVR",
+  "task": "regression",
+  "dataset": "bike",
+  "mech": "MAR",
+  "ratio": 0.3,
+  "seed": 2,
+  "args": {
+    "imputer": "knn",
+    "dataset": "bike",
+    "ratio": 0.3,
+    "seed": 2,
+    "mech": "MAR",
+    "out_dir": "D:\\RETNO\\diff-paper2\\baselines_eksternal\\results_zlog",
+    "imp_dir": "D:\\RETNO\\diff-paper2\\baselines_eksternal\\results",
+    "thr_objective": "f1_macro"
+  },
+  "val": {
+    "rmse": 0.74575522339589,
+    "mae": 0.5349108585599069,
+    "r2": 0.48850242012146106,
+    "crps": NaN
+  },
+  "test": {
+    "rmse": 0.7531768180588209,
+    "mae": 0.5433048408556026,
+    "r2": 0.455140920646131,
+    "crps": NaN
+  },
+  "svm_time_s": 4.462989568710327,
+  "svm": {
+    "params": {
+      "C": 1.0,
+      "cache_size": 200,
+      "coef0": 0.0,
+      "degree": 3,
+      "epsilon": 0.1,
+      "gamma": "scale",
+      "kernel": "rbf",
+      "max_iter": -1,
+      "shrinking": true,
+      "tol": 0.001,
+      "verbose": false
+    },
+    "kolom_onehot": [],
+    "kolom_numerik": [
+      "yr",
+      "mnth",
+      "hr",
+      "temp",
+      "atemp",
+      "hum",
+      "windspeed",
+      "season",
+      "holiday",
+      "weekday",
+      "workingday",
+      "weathersit"
+    ],
+    "n_fitur_model": 12,
+    "standardisasi_y": {
+      "mean": 4.589325321547504,
+      "std": 1.4056294715607445,
+      "log1p": true
+    }
+  },
+  "imputasi": {
+    "train": {
+      "mae": 0.6889287920597763,
+      "rmse": 0.9638027062511646,
+      "acc": 0.5911562532061148,
+      "n_sel_numerik": 24341,
+      "n_sel_kategorik": 19494
+    },
+    "val": {
+      "mae": 0.687087600644483,
+      "rmse": 0.961701184979129,
+      "acc": 0.6051045728465083,
+      "n_sel_numerik": 3453,
+      "n_sel_kategorik": 2821
+    },
+    "test": {
+      "mae": 0.6928774946874671,
+      "rmse": 0.9661928238340229,
+      "acc": 0.604074402125775,
+      "n_sel_numerik": 6994,
+      "n_sel_kategorik": 5645
+    }
+  },
+  "total_time_s": 4.628739833831787
+}

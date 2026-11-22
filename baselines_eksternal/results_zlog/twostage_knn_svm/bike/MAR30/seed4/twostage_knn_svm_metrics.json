@@ -1,0 +1,93 @@
+{
+  "method": "twostage_knn_svm",
+  "imputer": "knn",
+  "prediktor": "SVR",
+  "task": "regression",
+  "dataset": "bike",
+  "mech": "MAR",
+  "ratio": 0.3,
+  "seed": 4,
+  "args": {
+    "imputer": "knn",
+    "dataset": "bike",
+    "ratio": 0.3,
+    "seed": 4,
+    "mech": "MAR",
+    "out_dir": "D:\\RETNO\\diff-paper2\\baselines_eksternal\\results_zlog",
+    "imp_dir": "D:\\RETNO\\diff-paper2\\baselines_eksternal\\results",
+    "thr_objective": "f1_macro"
+  },
+  "val": {
+    "rmse": 0.7291467557996719,
+    "mae": 0.5213307039708817,
+    "r2": 0.4665461452160201,
+    "crps": NaN
+  },
+  "test": {
+    "rmse": 0.7091468950788328,
+    "mae": 0.5117452008116501,
+    "r2": 0.4941414639474043,
+    "crps": NaN
+  },
+  "svm_time_s": 4.387012004852295,
+  "svm": {
+    "params": {
+      "C": 1.0,
+      "cache_size": 200,
+      "coef0": 0.0,
+      "degree": 3,
+      "epsilon": 0.1,
+      "gamma": "scale",
+      "kernel": "rbf",
+      "max_iter": -1,
+      "shrinking": true,
+      "tol": 0.001,
+      "verbose": false
+    },
+    "kolom_onehot": [],
+    "kolom_numerik": [
+      "yr",
+      "mnth",
+      "hr",
+      "temp",
+      "atemp",
+      "hum",
+      "windspeed",
+      "season",
+      "holiday",
+      "weekday",
+      "workingday",
+      "weathersit"
+    ],
+    "n_fitur_model": 12,
+    "standardisasi_y": {
+      "mean": 4.567921605167222,
+      "std": 1.4188254596024283,
+      "log1p": true
+    }
+  },
+  "imputasi": {
+    "train": {
+      "mae": 0.5985734719213973,
+      "rmse": 0.946925994912381,
+      "acc": 0.6812139555810054,
+      "n_sel_numerik": 19377,
+      "n_sel_kategorik": 24449
+    },
+    "val": {
+      "mae": 0.5995793934573352,
+      "rmse": 0.940251677788942,
+      "acc": 0.6677890011223344,
+      "n_sel_numerik": 2789,
+      "n_sel_kategorik": 3564
+    },
+    "test": {
+      "mae": 0.6124957715851099,
+      "rmse": 0.9636017793562031,
+      "acc": 0.6770096695049791,
+      "n_sel_numerik": 5555,
+      "n_sel_kategorik": 6929
+    }
+  },
+  "total_time_s": 4.549813270568848
+}
