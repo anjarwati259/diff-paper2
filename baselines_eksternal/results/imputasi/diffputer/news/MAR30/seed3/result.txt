@@ -1,0 +1,1 @@
+test | imputasi diffputer | MAE 0.4134 RMSE 1.1588 ACC 0.4130 | waktu 9430s

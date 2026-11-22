@@ -1,0 +1,76 @@
+{
+  "imputer": "mice",
+  "plugin_hyperimpute": "mice",
+  "dataset": "default",
+  "task": "classification",
+  "mech": "MAR",
+  "ratio": 0.3,
+  "seed": 3,
+  "aturan": "fit di train saja; val/test hanya transform; y tidak dipakai",
+  "imputasi_time_s": 117.17835712432861,
+  "kolom_numerik": [
+    "LIMIT_BAL",
+    "AGE",
+    "BILL_AMT1",
+    "BILL_AMT2",
+    "BILL_AMT3",
+    "BILL_AMT4",
+    "BILL_AMT5",
+    "BILL_AMT6",
+    "PAY_AMT1",
+    "PAY_AMT2",
+    "PAY_AMT3",
+    "PAY_AMT4",
+    "PAY_AMT5",
+    "PAY_AMT6"
+  ],
+  "kolom_kategorik": [
+    "SEX",
+    "EDUCATION",
+    "MARRIAGE",
+    "PAY_0",
+    "PAY_2",
+    "PAY_3",
+    "PAY_4",
+    "PAY_5",
+    "PAY_6"
+  ],
+  "train": {
+    "mae": 0.622698877499931,
+    "rmse": 0.9730129699214297,
+    "acc": 0.5044283942511125,
+    "n_sel_numerik": 76830,
+    "n_sel_kategorik": 68535
+  },
+  "desimal_per_kolom": {
+    "LIMIT_BAL": 0,
+    "AGE": 0,
+    "BILL_AMT1": 0,
+    "BILL_AMT2": 0,
+    "BILL_AMT3": 0,
+    "BILL_AMT4": 0,
+    "BILL_AMT5": 0,
+    "BILL_AMT6": 0,
+    "PAY_AMT1": 0,
+    "PAY_AMT2": 0,
+    "PAY_AMT3": 0,
+    "PAY_AMT4": 0,
+    "PAY_AMT5": 0,
+    "PAY_AMT6": 0
+  },
+  "val": {
+    "mae": 0.614284662012423,
+    "rmse": 0.9264304423232604,
+    "acc": 0.5012813941568427,
+    "n_sel_numerik": 10897,
+    "n_sel_kategorik": 9755
+  },
+  "test": {
+    "mae": 0.6232891190402895,
+    "rmse": 0.9826272164212136,
+    "acc": 0.4987824675324675,
+    "n_sel_numerik": 21833,
+    "n_sel_kategorik": 19712
+  },
+  "total_time_s": 118.34119057655334
+}

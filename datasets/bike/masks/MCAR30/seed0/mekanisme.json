@@ -1,0 +1,24 @@
+{
+  "ratio": 0.3,
+  "mekanisme": "MCAR",
+  "seed": 0,
+  "feature_cols": [
+    "yr",
+    "mnth",
+    "hr",
+    "temp",
+    "atemp",
+    "hum",
+    "windspeed",
+    "season",
+    "holiday",
+    "weekday",
+    "workingday",
+    "weathersit"
+  ],
+  "proporsi_missing_aktual": {
+    "train": 0.3011508425811755,
+    "val": 0.293632527809743,
+    "test": 0.2986670502493287
+  }
+}

@@ -7,9 +7,21 @@ Mengikuti gaya download_and_process.py milik DiffPuter:
      + datasets/Info/{nama}.json (indeks kolom numerik, kategorik, target)
   3. Split train/val/test 70/10/20 untuk seed 0-4
      -> datasets/{nama}/splits/seed{k}/{train,val,test}_idx.npy (+ CSV)
-  4. Mask missing MAR (5 mask = 5 seed; mask ke-k dipasangkan dengan split ke-k)
-     untuk ratio 10%, 20%, 30%, 40%
-     -> datasets/{nama}/masks/MAR{ratio}/seed{k}/{train,val,test}_mask.npy + mekanisme.json
+  4. Mask missing (5 mask = 5 seed; mask ke-k dipasangkan dengan split ke-k), mekanisme MAR / MCAR / MNAR
+     -> datasets/{nama}/masks/{MEKANISME}{ratio}/seed{k}/{train,val,test}_mask.npy + mekanisme.json
+        (mis. masks/MAR30/, masks/MCAR30/, masks/MNAR30/; dibaca data_loader.load_split(..., mech=...))
+
+Mekanisme missing (rumus sama dengan generate_mask.py DiffPuter, asal Muzellec dkk. ICML 2020):
+  MAR  : MAR_mask. Sebagian kolom (p_obs = 30%, atau 10% jika ratio > 30%) SELALU teramati; kolom lain hilang
+         dengan peluang sigmoid(x_obs @ W + b) (logistik, W acak, b dicari dengan bisection).
+  MCAR : setiap sel fitur hilang dengan peluang = ratio, bebas dari nilai apa pun (np.random.rand < p di DiffPuter).
+  MNAR : MNAR_mask_logistic dengan exclude_inputs=True (= 'MNAR_logistic_T2' di DiffPuter). Sebagian kolom
+         (p_params = 30%, atau 10% jika ratio > 30%) menjadi PEMICU; kolom lain hilang dengan peluang
+         sigmoid(x_pemicu @ W + b) dari NILAI ASLI pemicu; lalu kolom pemicu sendiri di-mask MCAR dengan peluang
+         ratio. Karena nilai pemicu bisa ikut hilang, missingness bergantung pada nilai yang tidak teramati (MNAR).
+  Sama untuk ketiganya: mekanisme dibentuk SEKALI dari train lalu dipakai untuk val/test; hanya kolom FITUR
+  yang di-mask; kolom pemicu distandardisasi dengan statistik train; seed bisa direproduksi.
+  MAR tidak berubah dari versi sebelumnya (mask MAR lama identik).
 
 Bedanya dengan DiffPuter:
   - Kolom target IKUT disimpan dan diletakkan di kolom terakhir.
@@ -39,7 +51,11 @@ Pemakaian:
                                                #   pip install xlrd)
   python download_and_split.py --no_csv        # simpan indeks split saja, tanpa CSV
   python download_and_split.py --only_mask     # buat ulang mask saja (data & split sudah ada)
-  python download_and_split.py --ratios 0.3    # ratio tertentu saja
+  python download_and_split.py --ratios 0.5 0.7 --only_mask    # ratio tertentu saja
+  python download_and_process.py --data shoppers --only_mask --mech MCAR --ratios 0.3          # mask MCAR30
+  python download_and_process.py --data shoppers --only_mask --mech MNAR --ratios 0.3          # mask MNAR30
+  python download_and_process.py --data bike --only_mask --mech MAR MCAR MNAR --ratios 0.3 0.5  # beberapa sekaligus
+  (lalu skrip metode/baseline dijalankan dengan --mech MCAR atau --mech MNAR)
 """
 
 import os
@@ -57,11 +73,11 @@ DATA_DIR = 'datasets'
 
 NAME_URL_DICT_UCI = {
     # 'news': 'https://archive.ics.uci.edu/static/public/332/online+news+popularity.zip',
-    # 'bike': 'https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip',
+    'bike': 'https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip',
     # klasifikasi (sama dengan repo DiffPuter)
     'shoppers': 'https://archive.ics.uci.edu/static/public/468/online+shoppers+purchasing+intention+dataset.zip',
-    'adult': 'https://archive.ics.uci.edu/static/public/2/adult.zip',
-    'default': 'https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip',
+    # 'adult': 'https://archive.ics.uci.edu/static/public/2/adult.zip',
+    # 'default': 'https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip',
 }
 
 # dataset yang TIDAK diunduh otomatis: file disiapkan manual di datasets/{nama}/
@@ -72,7 +88,9 @@ MANUAL_FILES = {
 
 SPLIT_RATIO = (0.7, 0.1, 0.2)       # train / val / test
 SEEDS = [0, 1, 2, 3, 4]             # 5 split = 5 mask (dipasangkan per seed)
-MAR_RATIOS = [0.3]   # missing ratio 0% tidak perlu mask
+MAR_RATIOS = [0.3, 0.5, 0.7]   # missing ratio 0% tidak perlu mask (dipakai untuk semua mekanisme)
+MECHS = ['MAR', 'MCAR', 'MNAR']
+SEED_OFFSET = {'MAR': 0, 'MCAR': 1_000_000, 'MNAR': 2_000_000}   # MAR tetap seperti versi lama
 
 
 # --------------------------------------------------------------------------
@@ -444,39 +462,127 @@ def apply_mar_mechanism(X, mech, rng):
     return mask
 
 
+def build_mcar_mechanism(X_train, ratio, rng):
+    """MCAR: setiap sel fitur hilang dengan peluang ratio, bebas dari nilai apa pun
+    (DiffPuter generate_mask: np.random.rand(*X.shape) < p). Tidak ada parameter yang dipelajari dari data."""
+    if not 0 < ratio < 1:
+        raise ValueError(f'ratio {ratio} harus di antara 0 dan 1')
+    return {'ratio': ratio}
+
+
+def apply_mcar_mechanism(X, mech, rng):
+    mask = rng.random(X.shape) < mech['ratio']
+    mask |= np.isnan(X)                           # nilai yang memang kosong dari awal ikut ditandai
+    return mask
+
+
+def build_mnar_mechanism(X_train, ratio, rng):
+    """
+    MNAR = MNAR_mask_logistic(exclude_inputs=True) DiffPuter ('MNAR_logistic_T2'), dibentuk dari data train.
+      - Pilih kolom PEMICU (p_params = 30%, atau 10% jika ratio > 30%, sama dengan q di generate_mask DiffPuter).
+      - Kolom lain hilang dengan peluang sigmoid(x_pemicu @ W + b) dari NILAI ASLI pemicu, W acak (W^T x
+        bervariansi 1, pick_coeffs), b dengan bisection agar rata-rata peluang = ratio (fit_intercepts).
+      - Saat diterapkan, kolom pemicu sendiri di-mask MCAR dengan peluang ratio -> missingness kolom lain bisa
+        bergantung pada nilai yang ikut hilang (MNAR). Total sel hilang ~ ratio.
+    """
+    n, d = X_train.shape
+    if not 0 < ratio < 1:
+        raise ValueError(f'ratio {ratio} harus di antara 0 dan 1')
+    p_params = 0.3 if ratio <= 0.3 else 0.1
+    d_params = max(int(p_params * d), 1)
+    if d_params >= d:
+        raise ValueError(f'{d} kolom terlalu sedikit untuk MNAR logistik')
+
+    idxs_params = np.sort(rng.choice(d, d_params, replace=False))
+    idxs_nas = np.array([i for i in range(d) if i not in idxs_params])
+
+    mu = np.nanmean(X_train[:, idxs_params], axis=0)
+    sd = np.nanstd(X_train[:, idxs_params], axis=0)
+    sd[sd == 0] = 1.0
+    Z = np.nan_to_num((X_train[:, idxs_params] - mu) / sd)
+
+    coeffs = rng.standard_normal((d_params, len(idxs_nas)))
+    std_wx = (Z @ coeffs).std(axis=0, ddof=1)
+    std_wx[std_wx == 0] = 1.0
+    coeffs = coeffs / std_wx                      # pick_coeffs
+
+    intercepts = np.zeros(len(idxs_nas))
+    for j in range(len(idxs_nas)):                # fit_intercepts
+        zj = Z @ coeffs[:, j]
+        intercepts[j] = optimize.bisect(lambda b: sigmoid(zj + b).mean() - ratio, -500, 500)
+
+    return {
+        'ratio': ratio, 'p_params': p_params,
+        'idxs_params': idxs_params.tolist(), 'idxs_nas': idxs_nas.tolist(),
+        'mu': mu.tolist(), 'sd': sd.tolist(),
+        'coeffs': coeffs.tolist(), 'intercepts': intercepts.tolist(),
+    }
+
+
+def apply_mnar_mechanism(X, mech, rng):
+    """Peluang hilang kolom non-pemicu dari NILAI ASLI pemicu (sebelum di-mask), lalu pemicu di-mask MCAR."""
+    n, d = X.shape
+    idxs_params = np.array(mech['idxs_params'])
+    idxs_nas = np.array(mech['idxs_nas'])
+    Z = np.nan_to_num((X[:, idxs_params] - np.array(mech['mu'])) / np.array(mech['sd']))
+    ps = sigmoid(Z @ np.array(mech['coeffs']) + np.array(mech['intercepts']))
+    mask = np.zeros((n, d), dtype=bool)
+    mask[:, idxs_nas] = rng.random((n, len(idxs_nas))) < ps
+    mask[:, idxs_params] = rng.random((n, len(idxs_params))) < mech['ratio']
+    mask |= np.isnan(X)
+    return mask
+
+
+MEKANISME = {
+    'MAR': (build_mar_mechanism, apply_mar_mechanism),
+    'MCAR': (build_mcar_mechanism, apply_mcar_mechanism),
+    'MNAR': (build_mnar_mechanism, apply_mnar_mechanism),
+}
+
+
 def make_mar_masks(name, ratios=MAR_RATIOS, seeds=SEEDS):
+    """Dipertahankan agar pemanggilan lama tetap jalan (= make_masks dengan mech='MAR')."""
+    make_masks(name, ratios=ratios, seeds=seeds, mech='MAR')
+
+
+def make_masks(name, ratios=MAR_RATIOS, seeds=SEEDS, mech='MAR'):
+    if mech not in MEKANISME:
+        raise ValueError(f'mekanisme {mech} tidak dikenal; pilih dari {MECHS}')
+    build_fn, apply_fn = MEKANISME[mech]
     df = pd.read_csv(f'{DATA_DIR}/{name}/data.csv')
     with open(f'{DATA_DIR}/Info/{name}.json') as f:
         info = json.load(f)
     X, feat_cols = feature_matrix(df, info)
+    nama_mech = mech
 
     ratios = [r for r in ratios if r > 0]         # ratio 0% tidak perlu mask
-    print(f'Mask MAR {name}: {X.shape[1]} kolom fitur, ratio {ratios}, seed {seeds}')
+    print(f'Mask {nama_mech} {name}: {X.shape[1]} kolom fitur, ratio {ratios}, seed {seeds}')
     for ratio in ratios:
-        tag = f'MAR{int(round(ratio * 100)):02d}'
+        tag = f'{nama_mech}{int(round(ratio * 100)):02d}'
         for seed in seeds:
             split_dir = f'{DATA_DIR}/{name}/splits/seed{seed}'
             idx = {p: np.load(f'{split_dir}/{p}_idx.npy') for p in ['train', 'val', 'test']}
 
-            # seed berbeda untuk tiap (seed, ratio), tetap bisa direproduksi
-            rng = np.random.default_rng(10_000 * seed + int(round(ratio * 100)))
-            mech = build_mar_mechanism(X[idx['train']], ratio, rng)
+            # seed berbeda untuk tiap (mekanisme, seed, ratio), tetap bisa direproduksi (MAR sama dengan versi lama)
+            rng = np.random.default_rng(SEED_OFFSET[nama_mech] + 10_000 * seed + int(round(ratio * 100)))
+            mech_p = build_fn(X[idx['train']], ratio, rng)
 
             out_dir = f'{DATA_DIR}/{name}/masks/{tag}/seed{seed}'
             os.makedirs(out_dir, exist_ok=True)
             actual = {}
             for part in ['train', 'val', 'test']:
-                m = apply_mar_mechanism(X[idx[part]], mech, rng)
+                m = apply_fn(X[idx[part]], mech_p, rng)
                 np.save(f'{out_dir}/{part}_mask.npy', m)   # baris mengikuti urutan {part}_idx.npy
                 actual[part] = float(m.mean())
 
-            mech.update({
-                'mekanisme': 'MAR', 'seed': seed, 'feature_cols': feat_cols,
-                'kolom_selalu_teramati': [feat_cols[i] for i in mech['idxs_obs']],
-                'proporsi_missing_aktual': actual,
-            })
+            mech_p.update({'mekanisme': nama_mech, 'seed': seed, 'feature_cols': feat_cols})
+            if nama_mech == 'MAR':
+                mech_p['kolom_selalu_teramati'] = [feat_cols[i] for i in mech_p['idxs_obs']]
+            elif nama_mech == 'MNAR':
+                mech_p['kolom_pemicu'] = [feat_cols[i] for i in mech_p['idxs_params']]
+            mech_p['proporsi_missing_aktual'] = actual
             with open(f'{out_dir}/mekanisme.json', 'w') as f:
-                json.dump(mech, f, indent=2)
+                json.dump(mech_p, f, indent=2)
 
         print(f'  {tag}: contoh seed {seeds[-1]} proporsi aktual '
               f"train {actual['train']:.3f}, val {actual['val']:.3f}, test {actual['test']:.3f}")
@@ -491,7 +597,9 @@ if __name__ == '__main__':
     parser.add_argument('--no_download', action='store_true', help='lewati unduhan (zip sudah ada)')
     parser.add_argument('--no_csv', action='store_true', help='simpan indeks split saja, tanpa CSV')
     parser.add_argument('--only_mask', action='store_true', help='buat mask saja (data dan split sudah ada)')
-    parser.add_argument('--ratios', type=float, nargs='+', default=MAR_RATIOS, help='missing ratio MAR')
+    parser.add_argument('--ratios', type=float, nargs='+', default=MAR_RATIOS, help='missing ratio')
+    parser.add_argument('--mech', nargs='+', default=['MAR'], choices=MECHS,
+                        help='mekanisme missing: MAR (bawaan), MCAR, MNAR; boleh lebih dari satu')
     args = parser.parse_args()
 
     names = list(NAME_URL_DICT_UCI.keys()) if args.data == 'all' else [args.data]
@@ -502,5 +610,6 @@ if __name__ == '__main__':
                 download_from_uci(name)
             globals()[f'process_{name}']()
             make_splits(name, save_csv=not args.no_csv)
-        make_mar_masks(name, ratios=args.ratios)
+        for m in args.mech:
+            make_masks(name, ratios=args.ratios, mech=m)
         print()

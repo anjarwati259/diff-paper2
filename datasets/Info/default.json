@@ -1,0 +1,65 @@
+{
+    "name": "default",
+    "num_col_idx": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+    ],
+    "cat_col_idx": [
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+    ],
+    "target_col_idx": [
+        23
+    ],
+    "num_cols": [
+        "LIMIT_BAL",
+        "AGE",
+        "BILL_AMT1",
+        "BILL_AMT2",
+        "BILL_AMT3",
+        "BILL_AMT4",
+        "BILL_AMT5",
+        "BILL_AMT6",
+        "PAY_AMT1",
+        "PAY_AMT2",
+        "PAY_AMT3",
+        "PAY_AMT4",
+        "PAY_AMT5",
+        "PAY_AMT6"
+    ],
+    "cat_cols": [
+        "SEX",
+        "EDUCATION",
+        "MARRIAGE",
+        "PAY_0",
+        "PAY_2",
+        "PAY_3",
+        "PAY_4",
+        "PAY_5",
+        "PAY_6"
+    ],
+    "target": "default",
+    "task_type": "classification",
+    "log_target": false,
+    "n_rows": 30000,
+    "source": "https://archive.ics.uci.edu/static/public/350/default+of+credit+card+clients.zip"
+}

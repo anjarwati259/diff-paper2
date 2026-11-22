@@ -1,0 +1,29 @@
+{
+  "ratio": 0.3,
+  "mekanisme": "MCAR",
+  "seed": 3,
+  "feature_cols": [
+    "Administrative",
+    "Administrative_Duration",
+    "Informational",
+    "Informational_Duration",
+    "ProductRelated",
+    "ProductRelated_Duration",
+    "BounceRates",
+    "ExitRates",
+    "PageValues",
+    "SpecialDay",
+    "Month",
+    "OperatingSystems",
+    "Browser",
+    "Region",
+    "TrafficType",
+    "VisitorType",
+    "Weekend"
+  ],
+  "proporsi_missing_aktual": {
+    "train": 0.3004559488028788,
+    "val": 0.3018939936071752,
+    "test": 0.3007251562425457
+  }
+}

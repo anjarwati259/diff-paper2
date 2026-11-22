@@ -1,0 +1,1 @@
+test | imputasi missforest | MAE 0.3658 RMSE 0.8716 ACC 0.6798 | waktu 240s
