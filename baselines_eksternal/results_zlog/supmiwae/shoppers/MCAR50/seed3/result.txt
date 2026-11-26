@@ -1,0 +1,1 @@
+test | supmiwae | Acc 0.8654 F1(macro) 0.6154 AUC 0.7929 Brier 0.2096 [ambang val 0.313: Acc 0.8491 F1(macro) 0.6633] | waktu 142s

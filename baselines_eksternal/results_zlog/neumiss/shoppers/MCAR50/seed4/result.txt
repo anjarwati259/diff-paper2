@@ -1,0 +1,1 @@
+test | neumiss | Acc 0.8654 F1(macro) 0.6370 AUC 0.8026 Brier 0.2078 [ambang val 0.318: Acc 0.8350 F1(macro) 0.6768] | waktu 1036s

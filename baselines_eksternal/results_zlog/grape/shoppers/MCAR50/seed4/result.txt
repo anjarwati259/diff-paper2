@@ -1,0 +1,1 @@
+test | grape | Acc 0.8633 F1(macro) 0.6502 AUC 0.8314 Brier 0.1992 [ambang val 0.244: Acc 0.8204 F1(macro) 0.6992] | waktu 144s
