@@ -1,0 +1,1 @@
+test | twostage_knn_svm | Acc 0.8544 F1(macro) 0.5654 AUC 0.6777 Brier 0.2357 [ambang val 0.170: Acc 0.8264 F1(macro) 0.6411] | waktu 6s

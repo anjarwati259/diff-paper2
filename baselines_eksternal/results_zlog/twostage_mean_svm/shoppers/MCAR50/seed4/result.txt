@@ -1,0 +1,1 @@
+test | twostage_mean_svm | Acc 0.8646 F1(macro) 0.6027 AUC 0.7773 Brier 0.2212 [ambang val 0.145: Acc 0.8163 F1(macro) 0.6554] | waktu 5s

@@ -1,0 +1,1 @@
+test | twostage_missforest_svm | Acc 0.8601 F1(macro) 0.5739 AUC 0.7450 Brier 0.2270 [ambang val 0.151: Acc 0.8204 F1(macro) 0.6573] | waktu 5s

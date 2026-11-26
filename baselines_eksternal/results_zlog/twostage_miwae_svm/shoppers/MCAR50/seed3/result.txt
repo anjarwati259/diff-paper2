@@ -1,0 +1,1 @@
+test | twostage_miwae_svm | Acc 0.8674 F1(macro) 0.6247 AUC 0.7196 Brier 0.2157 [ambang val 0.156: Acc 0.8569 F1(macro) 0.6940] | waktu 6s

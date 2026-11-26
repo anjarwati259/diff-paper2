@@ -1,0 +1,1 @@
+test | twostage_mice_svm | Acc 0.8544 F1(macro) 0.5298 AUC 0.6620 Brier 0.2378 [ambang val 0.173: Acc 0.7981 F1(macro) 0.6127] | waktu 6s

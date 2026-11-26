@@ -1,0 +1,2 @@
+val | Acc 0.8564 Prec(w) 0.8357 Rec(w) 0.8564 F1(w) 0.8393 F1(macro) 0.6689 AUC 0.8363 AUC(w) 0.8363 NLL 0.3463 Brier 0.2114 ECE 0.0484 | ambang 0.238: Acc 0.8394 F1(macro) 0.7222 F1(w) 0.8456 | TS NLL 0.3327 Brier 0.2072 ECE 0.0207 | T 1.368 | pohon 100
+test | Acc 0.8540 Prec(w) 0.8299 Rec(w) 0.8540 F1(w) 0.8352 F1(macro) 0.6472 AUC 0.8092 AUC(w) 0.8092 NLL 0.3656 Brier 0.2189 ECE 0.0424 | ambang 0.238: Acc 0.8175 F1(macro) 0.6843 F1(w) 0.8270 | TS NLL 0.3470 Brier 0.2145 ECE 0.0163 | T 1.368 | pohon 100

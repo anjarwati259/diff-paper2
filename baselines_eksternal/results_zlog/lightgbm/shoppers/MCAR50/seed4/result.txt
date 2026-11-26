@@ -1,0 +1,1 @@
+test | lightgbm | Acc 0.8662 F1(macro) 0.6453 AUC 0.8297 Brier 0.1996 [ambang val 0.240: Acc 0.8143 F1(macro) 0.6866] | waktu 0s

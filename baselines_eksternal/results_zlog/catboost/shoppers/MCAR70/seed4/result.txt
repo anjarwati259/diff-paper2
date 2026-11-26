@@ -1,0 +1,1 @@
+test | catboost | Acc 0.8633 F1(macro) 0.5952 AUC 0.7645 Brier 0.2169 [ambang val 0.211: Acc 0.8118 F1(macro) 0.6489] | waktu 8s
