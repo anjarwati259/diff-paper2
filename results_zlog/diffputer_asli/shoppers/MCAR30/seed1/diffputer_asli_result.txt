@@ -1,0 +1,5 @@
+iteration 0 | test | imputasi MAE 0.433936 RMSE 0.912405 ACC 0.569140625 ACC_terdekat 0.569140625 | y Acc 0.8637 F1(macro) 0.6079 AUC 0.7545 Brier 0.2123
+iteration 1 | test | imputasi MAE 0.400869 RMSE 0.879622 ACC 0.5623046875 ACC_terdekat 0.5623046875 | y Acc 0.8706 F1(macro) 0.6326 AUC 0.7770 Brier 0.2081
+iteration 2 | test | imputasi MAE 0.385790 RMSE 0.875980 ACC 0.5681640625 ACC_terdekat 0.5681640625 | y Acc 0.8678 F1(macro) 0.6092 AUC 0.7510 Brier 0.2082
+iteration 3 | test | imputasi MAE 0.374423 RMSE 0.857226 ACC 0.5720703125 ACC_terdekat 0.5720703125 | y Acc 0.8690 F1(macro) 0.6238 AUC 0.7810 Brier 0.2086
+iteration 4 | test | imputasi MAE 0.371138 RMSE 0.843393 ACC 0.575 ACC_terdekat 0.575 | y Acc 0.8694 F1(macro) 0.6199 AUC 0.7560 Brier 0.2100
